@@ -1,0 +1,3 @@
+[submodule "symsysc"]
+	path = symsysc
+	url = git@gitlab.informatik.uni-bremen.de:riscv/symsysc.git
