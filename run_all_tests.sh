@@ -3,8 +3,8 @@ GRN='\033[1;32m'
 BLU='\033[1;34m'
 NORM='\033[0m'
 
-buildfolder="build"
-sourcefolder=$(realpath source)
+buildfolder="build/bytecode"
+sourcefolder=$(realpath .)
 tests=(
 #    "sensor#1"
 #    "sensor#2"

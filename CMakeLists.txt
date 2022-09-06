@@ -31,8 +31,8 @@ add_executable(testbench_sysc_plic
 target_include_directories(testbench_sysc_plic PRIVATE ${SystemC_INCLUDE_DIR} symsysc/klee)
 target_compile_definitions(testbench_sysc_plic PRIVATE EXTRA_BUGS)
 target_link_libraries(testbench_sysc_plic ${SystemC_LIBRARIES} peripherals_sysc)
+target_link_libraries(testbench_sysc_plic peripherals_sysc)
 
-#[[
 add_executable(testbench_plic_fault
         benches/bench_plic.cpp
 )
@@ -54,7 +54,6 @@ add_executable(testbench_uart
         benches/bench_uart.cpp
 )
 target_link_libraries(testbench_uart minikernel peripherals_translated)
-]]
 
 set(KLEE_ARGS
 	"--libcxx"
@@ -63,12 +62,16 @@ set(KLEE_ARGS
 	#"--emit-all-errors=1"
 )
 
+set(KLEE_EXE
+	"/home/pp/shitgit/klee_build140stp_z3/bin/klee"
+)
+
 add_custom_target(run_klee_tests_with_instructions
-    COMMAND time klee ${KLEE_ARGS} --debug-print-instructions=src:file testbench_plic
+    COMMAND time ${KLEE_EXE} ${KLEE_ARGS} --debug-print-instructions=src:file testbench_plic
     DEPENDS testbench_plic
 )
 
 add_custom_target(run_sysc_bench
-    COMMAND time klee --libc=uclibc -posix-runtime -only-output-states-covering-new --libcxx testbench_sysc_plic interface_test_write
+    COMMAND time ${KLEE_EXE} ${KLEE_ARGS} -only-output-states-covering-new testbench_sysc_plic interface_test_write
     DEPENDS testbench_sysc_plic
 )

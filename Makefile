@@ -1,4 +1,5 @@
 THREADS := $(shell nproc)
+MAKEFLAGS += --no-print-directory
 
 container_prog:= podman
 ifeq (, $(shell which podman))
@@ -22,10 +23,10 @@ build/bytecode/Makefile: build/bytecode
 	cd build/bytecode && cmake -DBUILD=bytecode ../..
 
 native: build/native/Makefile
-	make -C build/native #-j$(THREADS)
+	make -C build/native
 
 bytecode: build/bytecode/Makefile
-	make -C build/bytecode #-j$(THREADS)
+	make -C build/bytecode
 
 clean-native:
 	rm -r build/native
