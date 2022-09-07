@@ -12,7 +12,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-include(symsysc/CMake_DetermineLanguage.txt)
+include(symsysc/DetermineLanguage.cmake)
 find_package( SystemC REQUIRED)
 
 add_subdirectory(symsysc)
@@ -31,7 +31,6 @@ add_executable(testbench_sysc_plic
 target_include_directories(testbench_sysc_plic PRIVATE ${SystemC_INCLUDE_DIR} symsysc/klee)
 target_compile_definitions(testbench_sysc_plic PRIVATE EXTRA_BUGS)
 target_link_libraries(testbench_sysc_plic ${SystemC_LIBRARIES} peripherals_sysc)
-target_link_libraries(testbench_sysc_plic peripherals_sysc)
 
 add_executable(testbench_plic_fault
         benches/bench_plic.cpp
@@ -67,7 +66,7 @@ set(KLEE_EXE
 )
 
 add_custom_target(run_klee_tests_with_instructions
-    COMMAND time ${KLEE_EXE} ${KLEE_ARGS} --debug-print-instructions=src:file testbench_plic
+    COMMAND time ${KLEE_EXE} ${KLEE_ARGS} --debug-print-instructions=src:file testbench_plic interface_test_write
     DEPENDS testbench_plic
 )
 

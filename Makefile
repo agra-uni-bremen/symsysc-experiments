@@ -8,19 +8,25 @@ endif
 
 default: native
 
-all: native bytecode
+all: native bytecode #wllvm
 
 build/native:
 	mkdir -p build/native
 
 build/bytecode:
 	mkdir -p build/bytecode
+
+build/wllvm:
+	mkdir -p build/wllvm
 	
 build/native/Makefile: build/native
 	cd build/native && cmake -DBUILD=native ../..
 
 build/bytecode/Makefile: build/bytecode
 	cd build/bytecode && cmake -DBUILD=bytecode ../..
+
+build/wllvm/Makefile: build/wllvm
+	cd build/wllvm && cmake -DBUILD=wllvm ../..
 
 native: build/native/Makefile
 	make -C build/native
