@@ -17,6 +17,12 @@ find_package( SystemC REQUIRED)
 
 add_subdirectory(symsysc)
 add_subdirectory(duts)
+add_subdirectory(plic-rtl)
+
+add_executable(testbench_rtl
+        benches/bench_plic_rtl.cpp
+)
+target_link_libraries(testbench_rtl minikernel plic_verilated)
 
 add_executable(testbench_plic
         benches/bench_plic.cpp

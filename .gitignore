@@ -2,4 +2,7 @@
 .project
 .settings/
 build/
-test/	
+test/
+docker-error
+.idea/
+
