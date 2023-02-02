@@ -9,7 +9,7 @@
     if (plic_.rootp->RVPLIC__DOT__pending_interrupts_##n)                                                              \
         pendings_[n] = false;
 
-PlicRtlWrapper::PlicRtlWrapper(sc_core::sc_module_name, sc_clock &clk, PrivilegeLevel level)
+PlicRtlWrapper::PlicRtlWrapper(sc_module_name, sc_clock &clk, PrivilegeLevel level)
     : plic_{"plic_rtl"}
     , plic_regs_mem_{&plic_regs_}
     , hart{nullptr}
@@ -58,7 +58,7 @@ void PlicRtlWrapper::gateway_trigger_interrupt(uint32_t irq_id)
     pendings_[irq_id] = true;
 }
 
-void PlicRtlWrapper::transport(tlm::tlm_generic_payload &trans, sc_core::sc_time &delay)
+void PlicRtlWrapper::transport(tlm::tlm_generic_payload &trans, sc_time &delay)
 {
     vp::mm::route("PlicRtlWrapper", plic_regs_mem_, trans, delay);
 }
