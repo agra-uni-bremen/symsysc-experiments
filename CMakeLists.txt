@@ -22,7 +22,7 @@ add_subdirectory(plic-rtl)
 add_executable(testbench_clock
 		benches/bench_clock.cpp
 )
-target_link_libraries(testbench_clock minikernel)
+target_link_libraries(testbench_clock minikernel peripherals_translated)
 
 add_executable(testbench_rtl
         benches/bench_plic_rtl.cpp
