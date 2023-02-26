@@ -5,7 +5,7 @@
 int main(int, char*[])
 {
 	sc_clock clk{"plic_clk", sc_core::sc_time(1000, sc_core::SC_NS)};
-    PlicRtlWrapper plic("PlicRtlWrappper", clk);
+	PlicRtlWrapper plic("PlicRtlWrappper", clk);
 	plic.init();
 	// start
 	return 0;
