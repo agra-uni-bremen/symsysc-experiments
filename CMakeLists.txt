@@ -73,7 +73,7 @@ set(KLEE_ARGS
 )
 
 set(KLEE_EXE
-	"/home/pp/shitgit/klee_build140stp_z3/bin/klee"
+	"klee"
 )
 
 add_custom_target(run_klee_tests_with_instructions

@@ -1,12 +1,27 @@
-FROM klee/klee
+FROM klee/klee:2.3
 
-#RUN sudo apt update && sudo apt install time libboost-all-dev lld wget libssl-dev python-reportlab nano less -y
-RUN sudo apt update && sudo apt install time libboost-all-dev wget libssl-dev python-reportlab nano less python-tabulate -y
-# Damn old ubuntu with even older cmake without target link options
-RUN sudo apt purge --auto-remove cmake -y
-RUN cd && wget https://github.com/Kitware/CMake/releases/download/v3.18.2/cmake-3.18.2.tar.gz && tar xzf cmake-3.18.2.tar.gz
-RUN cd cmake-3.18.2 && ./bootstrap && make -j$(nproc) && sudo make install
-RUN sudo ln -s /home/klee/klee_src/include/ /include	# This is for shitty clang include problem not honoring LIBRARY_PATH
-RUN mkdir all && echo "cd build && cmake -DBUILD=bytecode ../source && make -j$(nproc) && cd ../build_native && cmake ../source && make -j$(nproc)" > make.sh && chmod +x make.sh
-RUN rm cmake-3.18.2.tar.gz
-RUN pip install wllvm
+RUN sudo apt update && sudo apt install time libglib2.0-dev libboost-all-dev wget libssl-dev python-reportlab nano less python-tabulate build-essential git autoconf flex bison -y
+
+RUN sudo ln -sT /usr/bin/clang-11 /usr/bin/clang && sudo ln -sT /usr/bin/clang++-11 /usr/bin/clang++ && sudo ln -sT /usr/bin/llvm-link-11 /usr/bin/llvm-link
+RUN echo '/tmp/libc++-install-110/lib/' | sudo tee /etc/ld.so.conf.d/libc++.conf
+RUN sudo ldconfig
+
+RUN sudo pip3 install wllvm
+#RUN export LLVM_COMPILER=clang
+
+RUN sudo ln -sT /tmp/libc++-install-110/lib /usr/local/lib/libc++
+
+RUN cd && git clone http://git.veripool.org/git/verilator #&& git pull --recurse-submodules
+WORKDIR verilator
+RUN git checkout v4.228
+RUN autoconf
+RUN ./configure
+RUN make -j8
+#USER root
+RUN sudo make install
+
+WORKDIR /home/klee
+RUN mkdir build build_native && echo "cd build && cmake -DBUILD=bytecode ../source && make -j$(nproc) && cd ../build_native && cmake ../source && make -j$(nproc)" > make.sh && chmod +x make.sh
+
+RUN ( echo "export CPLUS_INCLUDE_PATH=/tmp/llvm-110/libcxx/include" >> .bashrc ; echo "export LIBRARY_PATH=$LIBRARY_PATH:/tmp/libc++-install-110/lib/" >> .bashrc ; echo "export LLVM_COMPILER=clang" >> .bashrc ; echo "export MAKEFLAGS=\"-j$(nproc)\"" >> .bashrc )
+ENTRYPOINT ["bash", "--init-file", "~/.bashrc"]
