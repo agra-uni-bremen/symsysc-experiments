@@ -15,6 +15,8 @@ endif()
 include(symsysc/DetermineLanguage.cmake)
 find_package( SystemC REQUIRED)
 
+include_directories(/usr/share/verilator/include/)  # check VERILATOR_ROOT (verilator -V)
+
 add_subdirectory(symsysc)
 add_subdirectory(duts)
 add_subdirectory(plic-rtl)

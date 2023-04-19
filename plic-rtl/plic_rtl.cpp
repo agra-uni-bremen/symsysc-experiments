@@ -1,7 +1,7 @@
 #include "plic_rtl.h"
 #include <iostream>
 #include <boost/preprocessor/repetition/repeat.hpp>
-#include "VRVPLIC___024root.h"
+#include "plic_dir/VRVPLIC___024root.h"
 // #include "VRVPLIC.h"
 #define IO_INIT_PENDING(z, n, data) plic_.io_has_pending_irq_##n(pendings_[n]);
 

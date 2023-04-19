@@ -6,7 +6,7 @@ RUN echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https:
 RUN sudo apt-get update
 
 
-RUN sudo apt update --allow-unauthenticated && sudo apt install time libglib2.0-dev libboost-all-dev wget libssl-dev python-reportlab nano less python-tabulate build-essential git autoconf flex bison -y
+RUN sudo apt update --allow-unauthenticated && sudo apt install time libglib2.0-dev libboost-all-dev wget libssl-dev python-reportlab nano less python-tabulate build-essential git autoconf flex bison verilator -y
 
 RUN sudo ln -sT /usr/bin/clang-11 /usr/bin/clang && sudo ln -sT /usr/bin/clang++-11 /usr/bin/clang++ && sudo ln -sT /usr/bin/llvm-link-11 /usr/bin/llvm-link
 RUN echo '/tmp/libc++-install-110/lib/' | sudo tee /etc/ld.so.conf.d/libc++.conf
@@ -17,14 +17,14 @@ RUN sudo pip3 install wllvm
 
 RUN sudo ln -sT /tmp/libc++-install-110/lib /usr/local/lib/libc++
 
-RUN cd && git clone http://git.veripool.org/git/verilator #&& git pull --recurse-submodules
-WORKDIR verilator
-RUN git checkout v4.228
-RUN autoconf
-RUN ./configure
-RUN make -j8
+#RUN cd && git clone http://git.veripool.org/git/verilator #&& git pull --recurse-submodules
+#WORKDIR verilator
+#RUN git checkout v4.228
+#RUN autoconf
+#RUN ./configure
+#RUN make -j8
 #USER root
-RUN sudo make install
+#RUN sudo make install
 
 WORKDIR /home/klee
 RUN mkdir build build_native && echo "cd build && cmake -DBUILD=bytecode ../source && make -j$(nproc) && cd ../build_native && cmake ../source && make -j$(nproc)" > make.sh && chmod +x make.sh

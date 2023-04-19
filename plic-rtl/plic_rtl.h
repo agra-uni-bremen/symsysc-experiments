@@ -1,4 +1,5 @@
 #pragma once
+#include "plic_dir/VRVPLIC.h"
 #include "core/common/irq_if.h"
 #include "util/tlm_map.h"
 #include "util/memory_map.h"
@@ -7,7 +8,6 @@
 #include <array>
 #include <mutex>
 #include <systemc>
-#include <VRVPLIC.h>
 #include <tlm_utils/simple_target_socket.h>
 
 #define PLIC_RTL_NUM_IRQS 53
