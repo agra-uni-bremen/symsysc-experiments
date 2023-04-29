@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clock_signal.h"
+#include <iostream>
 #include <systemc.h>
 
 // model port-signal connection with clock module

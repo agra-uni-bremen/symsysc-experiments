@@ -5,8 +5,7 @@ RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/nul
 RUN echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ bionic main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
 RUN sudo apt-get update
 
-
-RUN sudo apt update --allow-unauthenticated && sudo apt install time libglib2.0-dev libboost-all-dev wget libssl-dev python-reportlab nano less python-tabulate build-essential git autoconf flex bison verilator -y
+RUN sudo apt update --allow-unauthenticated && sudo apt install time libglib2.0-dev libboost-all-dev wget libssl-dev python-reportlab nano less python-tabulate build-essential git autoconf flex bison -y
 
 RUN sudo ln -sT /usr/bin/clang-11 /usr/bin/clang && sudo ln -sT /usr/bin/clang++-11 /usr/bin/clang++ && sudo ln -sT /usr/bin/llvm-link-11 /usr/bin/llvm-link
 RUN echo '/tmp/libc++-install-110/lib/' | sudo tee /etc/ld.so.conf.d/libc++.conf

@@ -15,11 +15,11 @@ endif()
 include(symsysc/DetermineLanguage.cmake)
 find_package( SystemC REQUIRED)
 
-include_directories(/usr/share/verilator/include/)  # check VERILATOR_ROOT (verilator -V)
+include_directories(verilator/)  # locally: check VERILATOR_ROOT (verilator -V)
 
 add_subdirectory(symsysc)
 add_subdirectory(duts)
-add_subdirectory(plic-rtl)
+add_subdirectory(plic_rtl)
 
 add_executable(testbench_clock
 		benches/bench_clock.cpp
