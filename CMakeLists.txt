@@ -15,27 +15,23 @@ endif()
 include(symsysc/DetermineLanguage.cmake)
 find_package( SystemC REQUIRED)
 
-include_directories(verilator/)  # locally: check VERILATOR_ROOT (verilator -V)
-
 add_subdirectory(symsysc)
 add_subdirectory(duts)
-add_subdirectory(plic_rtl)
 
 add_executable(testbench_clock
 		benches/bench_clock.cpp
 )
-target_link_libraries(testbench_clock minikernel peripherals_translated)
-
-add_executable(testbench_rtl
-        benches/bench_plic_rtl.cpp
-)
-target_link_libraries(testbench_rtl minikernel plic_verilated)
+target_link_libraries(testbench_clock peripherals_translated)
 
 add_executable(testbench_plic
         benches/bench_plic.cpp
 )
-target_link_libraries(testbench_plic minikernel peripherals_translated)
+target_link_libraries(testbench_plic peripherals_translated)
 
+add_executable(testbench_rtl
+        benches/bench_plic_rtl.cpp
+)
+target_link_libraries(testbench_rtl peripherals_translated)
 
 add_executable(testbench_sysc_plic
         benches/bench_plic_sysc.cpp
@@ -49,23 +45,23 @@ add_executable(testbench_plic_fault
         benches/bench_plic.cpp
 )
 target_compile_definitions(testbench_plic_fault PRIVATE EXTRA_BUGS)
-target_link_libraries(testbench_plic_fault minikernel peripherals_translated )
+target_link_libraries(testbench_plic_fault peripherals_translated )
 
 
 add_executable(testbench_sensor
         benches/bench_sensor.cpp
 )
-target_link_libraries(testbench_sensor minikernel peripherals_translated)
+target_link_libraries(testbench_sensor peripherals_translated)
 
 add_executable(testbench_sensor2
         benches/bench_sensor2.cpp
 )
-target_link_libraries(testbench_sensor2 minikernel peripherals_translated)
+target_link_libraries(testbench_sensor2 peripherals_translated)
 
 add_executable(testbench_uart
         benches/bench_uart.cpp
 )
-target_link_libraries(testbench_uart minikernel peripherals_translated)
+target_link_libraries(testbench_uart peripherals_translated)
 
 set(KLEE_ARGS
 	"--libcxx"

@@ -1,12 +1,16 @@
 #ifndef RISCV_TLM_MAP_H
 #define RISCV_TLM_MAP_H
 
+#include <systemc>
+
+#include <tlm_utils/simple_initiator_socket.h>
+#include <tlm_utils/simple_target_socket.h>
+
 
 #include <functional>
 #include <map>
 #include <string.h>
 #include <assert.h>
-#include <systemc>
 
 /*
  * Optional modelling layer to simplify TLM register and memory access.

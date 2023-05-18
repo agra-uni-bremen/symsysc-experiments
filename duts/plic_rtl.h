@@ -1,18 +1,19 @@
 #pragma once
-#include "plic_dir/VRVPLIC.h"
-#include "core/common/irq_if.h"
+#include "verilated/VRVPLIC.h"
+#include "core/common/irq_if_rtl.h"
 #include "util/tlm_map.h"
 #include "util/memory_map.h"
 #include "simple_bus_rtl.h"
 
+#include <systemc>
+
 #include <array>
 #include <mutex>
-#include <systemc>
 #include <tlm_utils/simple_target_socket.h>
 
 #define PLIC_RTL_NUM_IRQS 53
 
-class PlicRtlWrapper : public sc_module, public interrupt_gateway
+class PlicRtlWrapper : public sc_module , public interrupt_gateway
 {
 private:
     static constexpr uint32_t kNumIrqs = PLIC_RTL_NUM_IRQS;
@@ -32,7 +33,7 @@ private:
     void resetPendings();
 
 public:
-    VRVPLIC plic_;
+    // VRVPLIC plic_;
 
 private:
     std::mutex pendings_mtx_;

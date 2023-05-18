@@ -1,5 +1,5 @@
-#ifndef RISCV_ISA_IRQ_IF_H
-#define RISCV_ISA_IRQ_IF_H
+#ifndef RISCV_ISA_IRQ_IF_RTL_H
+#define RISCV_ISA_IRQ_IF_RTL_H
 
 #include <stdint.h>
 

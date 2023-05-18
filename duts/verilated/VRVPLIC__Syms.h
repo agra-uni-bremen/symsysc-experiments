@@ -7,9 +7,10 @@
 #ifndef VERILATED_VRVPLIC__SYMS_H_
 #define VERILATED_VRVPLIC__SYMS_H_  // guard
 
-#include "systemc.h"
 #include "verilated_sc.h"
 #include "verilated.h"
+
+#include "systemc.h"
 
 // INCLUDE MODEL CLASS
 
