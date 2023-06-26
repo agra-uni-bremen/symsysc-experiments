@@ -6,12 +6,15 @@ add_library(peripherals_translated
         ${HEADERS}
 )
 target_include_directories( peripherals_translated PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(peripherals_translated PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/verilator)# ${CMAKE_CURRENT_SOURCE_DIR}/verilator/vltstd)
+target_link_libraries(peripherals_translated PUBLIC minikernel)
 
 add_library(peripherals_sysc
         ${SOURCES}
         ${HEADERS}
 )
 target_include_directories( peripherals_sysc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(peripherals_sysc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/verilator)# ${CMAKE_CURRENT_SOURCE_DIR}/verilator/vltstd)
 target_include_directories( peripherals_sysc PRIVATE ${SystemC_INCLUDE_DIR})
 
 #"PRIVATE" not working as I expect it to (dont link at the end with executable...)
