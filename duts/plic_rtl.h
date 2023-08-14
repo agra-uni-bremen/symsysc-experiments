@@ -33,7 +33,7 @@ private:
     void resetPendings();
 
 public:
-    // VRVPLIC plic_;
+    VRVPLIC plic_;
 
 private:
     std::mutex pendings_mtx_;
