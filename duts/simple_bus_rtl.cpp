@@ -1,5 +1,10 @@
 #include "simple_bus_rtl.h"
 
+// müll
+#include <iostream>
+
+// TODO: does not work bc threads are not implemented!
+
 SimpleBusRtl::SimpleBusRtl(sc_clock &clk)
     : clk_{clk}
     , sel{"SimpleBusRTL_sel"}
@@ -14,6 +19,7 @@ SimpleBusRtl::SimpleBusRtl(sc_clock &clk)
 
 void SimpleBusRtl::write(uint64_t addr, uint32_t value)
 {
+	std::cout << "\t\t\t\t\t\t SIMPLE BUS WRITE" << std::endl;
     wait(clk_.negedge_event());
     sel = true;
     SBaddress = addr;
@@ -29,6 +35,7 @@ void SimpleBusRtl::write(uint64_t addr, uint32_t value)
 
 uint32_t SimpleBusRtl::read(uint64_t addr)
 {
+	std::cout << "\t\t\t\t\t\t SIMPLE BUS READ" << std::endl;
     wait(clk_.negedge_event());
     sel = true;
     SBaddress = addr;

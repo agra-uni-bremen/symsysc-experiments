@@ -1408,6 +1408,8 @@ VL_INLINE_OPT void VRVPLIC___024root___sequent__TOP__0(VRVPLIC___024root* vlSelf
     VL_ASSIGN_SII(32,vlSelf->io_sb_SBrdata, vlSelf->RVPLIC__DOT__SBPlicLogic_sbDataOutputReg);
     vlSelf->RVPLIC__DOT__claim_complete = __Vdly__RVPLIC__DOT__claim_complete;
     vlSelf->RVPLIC__DOT__interrupts_enabled = __Vdly__RVPLIC__DOT__interrupts_enabled;
+	std::cout << "Signal interrupt pending change in Verilated 2" << std::endl;
+	std::cout << (unsigned)vlSelf->RVPLIC__DOT__has_interrupt_pending << std::endl;
     VL_ASSIGN_SII(1,vlSelf->io_irq_pending, vlSelf->RVPLIC__DOT__has_interrupt_pending);
     vlSelf->RVPLIC__DOT___zz_3 = (1ULL << (0x3fU & vlSelf->RVPLIC__DOT__claim_complete));
     vlSelf->RVPLIC__DOT___zz_314 = (IData)((vlSelf->RVPLIC__DOT__interrupts_enabled 

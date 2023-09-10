@@ -10,7 +10,7 @@ public:
 	sc_clock m_clock;
 
 	explicit clock_signal(sc_core::sc_module_name name) : sc_module(name),
-	m_clock(sc_clock("clock", sc_time(10, SC_SEC))) {
+	m_clock{"clock", sc_time(10, SC_SEC)} {
 
 		SC_HAS_PROCESS(clock_signal);
 		SC_METHOD(run_pos);
