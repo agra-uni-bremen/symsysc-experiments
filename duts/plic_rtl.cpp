@@ -78,9 +78,7 @@ void PlicRtlWrapper::gateway_trigger_interrupt(uint32_t irq_id)
 
 void PlicRtlWrapper::transport(tlm::tlm_generic_payload &trans, sc_time &delay)
 {
-	std::cout << "transport called" << std::endl;
 	vp::mm::route("PlicRtlWrapper", plic_regs_mem_, trans, delay);
-	std::cout << "transport done" << std::endl;
 }
 
 bool PlicRtlWrapper::pre_read_regs(RegisterRange::ReadInfo t)
