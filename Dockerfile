@@ -16,17 +16,18 @@ RUN sudo pip3 install wllvm
 
 RUN sudo ln -sT /tmp/libc++-install-110/lib /usr/local/lib/libc++
 
-#RUN cd && git clone http://git.veripool.org/git/verilator #&& git pull --recurse-submodules
-#WORKDIR verilator
-#RUN git checkout v4.228
-#RUN autoconf
-#RUN ./configure
-#RUN make -j8
-#USER root
-#RUN sudo make install
+RUN cd && git clone http://git.veripool.org/git/verilator #&& git pull --recurse-submodules
+WORKDIR verilator
+RUN git checkout v4.228
+RUN autoconf
+RUN ./configure
+RUN make -j8
+USER root
+RUN sudo make install
 
 WORKDIR /home/klee
 RUN mkdir build build_native && echo "cd build && cmake -DBUILD=bytecode ../source && make -j$(nproc) && cd ../build_native && cmake ../source && make -j$(nproc)" > make.sh && chmod +x make.sh
+RUN ( echo "export CPLUS_INCLUDE_PATH=/tmp/llvm-110/libcxx/include" >> setup.sh ; echo "export LIBRARY_PATH=$LIBRARY_PATH:/tmp/libc++-install-110/lib/" >> setup.sh ; echo "export LLVM_COMPILER=clang" >> setup.sh ; echo "export MAKEFLAGS=\"-j$(nproc)\"" >> setup.sh ; echo "SYSTEMC_INCLUDE=/home/klee/build_native/systemc-dist/include" >> setup.sh ; echo "SYSTEMC_LIBDIR=/home/klee/build_native/systemc-dist/lib-native" >> setup.sh ; chmod +x setup.sh)
 
 RUN ( echo "export CPLUS_INCLUDE_PATH=/tmp/llvm-110/libcxx/include" >> .bashrc ; echo "export LIBRARY_PATH=$LIBRARY_PATH:/tmp/libc++-install-110/lib/" >> .bashrc ; echo "export LLVM_COMPILER=clang" >> .bashrc ; echo "export MAKEFLAGS=\"-j$(nproc)\"" >> .bashrc )
 ENTRYPOINT ["bash", "--init-file", "~/.bashrc"]

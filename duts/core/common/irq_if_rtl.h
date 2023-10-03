@@ -11,22 +11,22 @@ constexpr uint32_t SupervisorMode = 0b01;
 constexpr uint32_t UserMode = 0b00;
 constexpr uint32_t NoneMode = -1;  // invalid sentinel to avoid passing a boolean alongside a privilege level
 
-struct external_interrupt_target {
-	virtual ~external_interrupt_target() {}
+struct external_interrupt_target_rtl {
+	virtual ~external_interrupt_target_rtl() {}
 
 	virtual void trigger_external_interrupt(PrivilegeLevel level) = 0;
 	virtual void clear_external_interrupt(PrivilegeLevel level) = 0;
 };
 
-struct clint_interrupt_target {
-	virtual ~clint_interrupt_target() {}
+struct clint_interrupt_target_rtl {
+	virtual ~clint_interrupt_target_rtl() {}
 
 	virtual void trigger_timer_interrupt(bool status) = 0;
 	virtual void trigger_software_interrupt(bool status) = 0;
 };
 
-struct interrupt_gateway {
-	virtual ~interrupt_gateway() {}
+struct interrupt_gateway_rtl {
+	virtual ~interrupt_gateway_rtl() {}
 
 	virtual void gateway_trigger_interrupt(uint32_t irq_id) = 0;
 };

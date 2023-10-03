@@ -11,3 +11,24 @@ How to test:
 $ ./make.sh # optional
 $ ./run_all_tests.sh
 ```
+
+# How to run Dockerimage
+
+```bash
+make docker-build
+make docker
+```
+
+# How to use Dockerimage
+
+```bash
+source setup.sh
+./make.sh
+./source/run_all_tests.sh
+```
+
+# How to verilate
+
+```bash
+verilator --Mdir map --sc -LDFLAGS -Wno-attributes -Wno-WIDTH -Wno-UNOPTFLAT -Wno-CMPCONST -Wno-UNSIGNED peripherals/SBTaskMap.v
+```

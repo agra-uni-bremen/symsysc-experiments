@@ -1,5 +1,5 @@
 #pragma once
-#include "verilated/VRVPLIC.h"
+#include "plic/VRVPLIC.h"
 #include "core/common/irq_if_rtl.h"
 #include "util/tlm_map.h"
 #include "util/memory_map.h"
@@ -11,12 +11,9 @@
 #include <mutex>
 #include <tlm_utils/simple_target_socket.h>
 
-// TODO: simple bus does not work bc of incomplete wait(event) logic
-// testbench currently writing directly into signals etc, no interface tests possible
-
 #define PLIC_RTL_NUM_IRQS 53
 
-class PlicRtlWrapper : public sc_module , public interrupt_gateway
+class PlicRtlWrapper : public sc_module , public interrupt_gateway_rtl
 {
 private:
 	static constexpr uint32_t kNumIrqs = PLIC_RTL_NUM_IRQS;
@@ -28,9 +25,10 @@ public:
 	void gateway_trigger_interrupt(uint32_t irq_id) override;
 	void transport(tlm::tlm_generic_payload &trans, sc_time &delay);
 
-	// Müll
-	void s1(uint64_t _sba, uint32_t _sbv);
-	void s2();
+	void w1(uint64_t _sba, uint32_t _sbv);
+	void w2();
+	void r1(uint64_t _sba);
+	uint32_t r2(uint64_t _sba);
 
 private:
 	void run();
@@ -44,7 +42,7 @@ public:
 
 private:
 	std::mutex pendings_mtx_;
-	RegisterRange plic_regs_{0x0, 0x1000'0000};
+	RegisterRange plic_regs_{0x0, 0x20'0008};
 	std::vector<RegisterRange *> plic_regs_mem_;
 	sc_clock& clk_;
 	SimpleBusRtl simple_bus_;
@@ -55,5 +53,5 @@ public:
 	sc_signal<bool> irq_pending_;
 	std::array<sc_core::sc_signal<bool, SC_MANY_WRITERS>, kNumIrqs> pendings_;
 	tlm_utils::simple_target_socket<PlicRtlWrapper> tsock;
-	external_interrupt_target *hart;
+	external_interrupt_target_rtl *hart;
 };

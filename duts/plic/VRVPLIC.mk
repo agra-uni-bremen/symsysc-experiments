@@ -12,9 +12,9 @@ PERL = perl
 # Path to Verilator kit (from $VERILATOR_ROOT)
 VERILATOR_ROOT = /usr/local/share/verilator
 # SystemC include directory with systemc.h (from $SYSTEMC_INCLUDE)
-SYSTEMC_INCLUDE ?= /home/klee/source/build/systemc-dist/include/
+SYSTEMC_INCLUDE ?= /home/klee/build_native/systemc-dist/include
 # SystemC library directory with libsystemc.a (from $SYSTEMC_LIBDIR)
-SYSTEMC_LIBDIR ?= /home/klee/source/build/systemc-dist/lib-native/
+SYSTEMC_LIBDIR ?= /home/klee/build_native/systemc-dist/lib-native
 
 ### Switches...
 # C++ code coverage  0/1 (from --prof-c)

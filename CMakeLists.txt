@@ -18,6 +18,26 @@ find_package( SystemC REQUIRED)
 add_subdirectory(symsysc)
 add_subdirectory(duts)
 
+add_executable(testbench_gcd
+		benches/bench_gcd.cpp
+)
+target_link_libraries(testbench_gcd peripherals_translated)
+
+add_executable(testbench_hash
+		benches/bench_hash.cpp
+)
+target_link_libraries(testbench_hash peripherals_translated)
+
+add_executable(testbench_map
+		benches/bench_map.cpp
+)
+target_link_libraries(testbench_map peripherals_translated)
+
+add_executable(testbench_comp
+		benches/bench_comparison.cpp
+)
+target_link_libraries(testbench_comp peripherals_translated)
+
 add_executable(testbench_clock
 		benches/bench_clock.cpp
 )

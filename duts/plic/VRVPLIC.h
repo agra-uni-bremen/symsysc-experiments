@@ -8,10 +8,9 @@
 #ifndef VERILATED_VRVPLIC_H_
 #define VERILATED_VRVPLIC_H_  // guard
 
+#include "systemc.h"
 #include "verilated_sc.h"
 #include "verilated.h"
-
-#include "systemc.h"
 
 class VRVPLIC__Syms;
 class VRVPLIC___024root;

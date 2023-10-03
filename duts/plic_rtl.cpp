@@ -1,7 +1,7 @@
 #include "plic_rtl.h"
 #include <iostream>
 #include <boost/preprocessor/repetition/repeat.hpp>
-#include "verilated/VRVPLIC___024root.h"
+#include "plic/VRVPLIC___024root.h"
 // #include "plic_dir/VRVPLIC.h"
 #define IO_INIT_PENDING(z, n, data) plic_.io_has_pending_irq_##n(pendings_[n]);
 
@@ -50,7 +50,7 @@ void PlicRtlWrapper::init()
 	tsock.register_b_transport(this, &PlicRtlWrapper::transport);
 }
 
-void PlicRtlWrapper::s1(uint64_t _sba, uint32_t _sbv) {
+void PlicRtlWrapper::w1(uint64_t _sba, uint32_t _sbv) {
 	// wait(clock.negedge())
 	simple_bus_.sel = true;
 	simple_bus_.SBaddress = _sba;
@@ -62,11 +62,34 @@ void PlicRtlWrapper::s1(uint64_t _sba, uint32_t _sbv) {
 	// wait(clock.negedge())
 }
 
-void PlicRtlWrapper::s2() {
+void PlicRtlWrapper::w2() {
 	// davor s1 + einmal clock.pos  + clock.neg
 	simple_bus_.SBvalid = false;
 	simple_bus_.sel = false;
 	// einmal clock pos
+}
+
+void PlicRtlWrapper::r1(uint64_t _sba) {
+//	wait(clk_.negedge_event());
+	simple_bus_.sel = true;
+	simple_bus_.SBaddress = _sba;
+	simple_bus_.SBvalid = true;
+	simple_bus_.SBwdata = 0;
+	simple_bus_.SBwrite = false;
+//	wait(clk_.posedge_event());
+//	wait(clk_.negedge_event());
+}
+
+uint32_t PlicRtlWrapper::r2(uint64_t _sba) {
+	// davor r1 + einmal clock.pos + clock.neg
+	simple_bus_.SBaddress = 0;
+	simple_bus_.SBvalid = false;
+	const uint32_t value = simple_bus_.SBrdata.read();
+	simple_bus_.sel = false;
+
+//	wait(clk_.posedge_event());
+	memcpy(plic_regs_.mem.data() + _sba, &value, sizeof(uint32_t)); // aus pre read
+	return value;
 }
 
 void PlicRtlWrapper::gateway_trigger_interrupt(uint32_t irq_id)
@@ -83,41 +106,41 @@ void PlicRtlWrapper::transport(tlm::tlm_generic_payload &trans, sc_time &delay)
 
 bool PlicRtlWrapper::pre_read_regs(RegisterRange::ReadInfo t)
 {
-	std::cout << "[WARNING] simple bus does not work" << std::endl;
-	std::cout << "[plic rtl] pre read regs called" << std::endl;
+//	std::cout << "[WARNING] threads not correctly implemented, simple bus does not work" << std::endl;
 //	const auto res = simple_bus_.read(t.addr);
 //	memcpy(plic_regs_.mem.data() + t.addr, &res, sizeof(res));
 	// std::cout << "read " << std::hex << t.addr << std::dec << std::endl;
+	r1(t.addr);
 	return true;
 }
 
 void PlicRtlWrapper::post_write_regs(RegisterRange::WriteInfo t)
 {
-	std::cout << "[WARNING] simple bus does not work" << std::endl;
-	std::cout << "[plic rtl] post write regs called" << std::endl;
+//	std::cout << "[WARNING] threads not correctly implemented, simple bus does not work" << std::endl;
 	uint32_t val;
 	memcpy(&val, plic_regs_.mem.data() + t.addr, sizeof(val));
 	// std::cout << "write " << std::hex << t.addr << " = " << val << std::dec << std::endl;
 //	simple_bus_.write(t.addr, val);
-	s1(t.addr, val);
+	w1(t.addr, val);
 }
 
 void PlicRtlWrapper::watchIrqPending()
 {
-	std::cout << "some irq ready: " << irq_pending_.read() << std::endl;
+//	std::cout << "[plic rtl] some irq ready: " << irq_pending_.read() << std::endl;
 	if (hart && irq_pending_.read())
 	{
-		std::cout << "trigger external irq" << std::endl;
+//		std::cout << "[plic rtl] trigger external irq" << std::endl;
 		hart->trigger_external_interrupt(MachineMode);
 	}
 	else if (hart)
 	{
-		std::cout << "clear eip" << std::endl;
+//		std::cout << "[plic rtl] clear eip" << std::endl;
 		hart->clear_external_interrupt(MachineMode);
 	}
 }
 
 void PlicRtlWrapper::resetPendings()
 {
+//	std::cout << "[plic rtl] reset pending" << std::endl;
 	BOOST_PP_REPEAT(PLIC_RTL_NUM_IRQS, RESET_PENDING, void)
 }

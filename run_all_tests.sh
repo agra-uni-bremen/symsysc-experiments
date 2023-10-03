@@ -9,7 +9,7 @@ tests=(
 #    "sensor#1"
 #    "sensor#2"
 #    "uart"
-#    "plic#functional_test_basic"
+    "plic#functional_test_basic"
 #    "plic#functional_test_consider_threshold"
 #    "plic#functional_test_priority_direct"
 #    "plic#interface_test_read"
@@ -25,7 +25,14 @@ tests=(
 #    "sysc_plic#interface_test_read"
 #    "sysc_plic#interface_test_write"
   "rtl#functional_test_basic"
-  "plic#functional_test_basic"
+#  "rtl#functional_test_priority"
+#  "rtl#functional_test_threshold"
+#  "rtl#invalid_test_id"
+#  "rtl#interface_test_read"
+#  "rtl#interface_test_write"
+    "comp#functional_test_priority"
+    "gcd#comparison_basic"
+    "map#functional_rtl_basic"
     )
 today=$(date +"%Y-%m-%d-%H.%M")
 testfolder_base=test/$today

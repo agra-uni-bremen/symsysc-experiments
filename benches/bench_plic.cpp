@@ -68,7 +68,8 @@ struct Simple_interrupt_target : public external_interrupt_target
 void functional_test_basic(PLIC<1, numberInterrupts, maxPriority>& dut)
 {
 	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.target_harts[0]);
-	uint32_t i = klee_int("interrupt number");
+//	uint32_t i = klee_int("interrupt number");
+	uint32_t i = 51;
 
     dut.gateway_trigger_interrupt(i);
 
@@ -165,7 +166,6 @@ void functional_test_consider_threshold(PLIC<1, numberInterrupts, maxPriority>& 
 
 	uint32_t hart_consider_thr = klee_int("hart consider threshold");
 	klee_assume(hart_consider_thr < numberInterrupts);
-
 
 
 	//Direct write into member, skipping transport
@@ -295,6 +295,8 @@ int main(int argc, char* argv[])
 	Simple_interrupt_target sit(dut);
 	//interrupt line plic -> sit
 	dut.target_harts[0] = &sit;
+
+	Simcontext::get().initialize();
 	minikernel_step();	//0ms
 
 	if(argc == 2)

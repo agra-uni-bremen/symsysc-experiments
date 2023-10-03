@@ -1393,9 +1393,8 @@ VL_INLINE_OPT void VRVPLIC___024root___sequent__TOP__0(VRVPLIC___024root* vlSelf
                 }
             }
         }
-
         if ((0U == vlSelf->RVPLIC__DOT__claim_complete)) {
-            if (((0U != vlSelf->RVPLIC__DOT___zz_262)
+            if (((0U != vlSelf->RVPLIC__DOT___zz_262) 
                  & ((IData)(vlSelf->RVPLIC__DOT___zz_261)
                      ? (IData)(vlSelf->RVPLIC__DOT___zz_260)
                      : (IData)(vlSelf->RVPLIC__DOT___zz_108)))) {
