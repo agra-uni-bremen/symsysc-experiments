@@ -160,6 +160,7 @@ struct Simple_interrupt_target : public external_interrupt_target_rtl
 void functional_test_basic(PlicRtlWrapper& dut, test_runner &runner) {
 	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
 
+	// TODO: symbolic ID continue testing, also remove assumes to see what happens
 	// test valid interrupt number
 //	uint32_t id = 51;
 	uint32_t id = klee_int("interrupt number");
@@ -241,14 +242,10 @@ void functional_test_priority(PlicRtlWrapper& dut, test_runner& runner) {
 
 	uint32_t id_a = 1;
 	uint32_t id_b = 2;
-	uint32_t prio_a = klee_int("prio_a");
-	uint32_t prio_b = klee_int("prio_b");
-	klee_assume(prio_a > 0);
-	klee_assume(prio_b > 0);
-	klee_assume(prio_a <= 7);
-	klee_assume(prio_b <= 7);
-//	uint32_t prio_a = 3;
-//	uint32_t prio_b = 1;
+//	uint32_t prio_a = klee_int("prio_a");
+//	uint32_t prio_b = klee_int("prio_b");
+	uint32_t prio_a = 3;
+	uint32_t prio_b = 1;
 
 	minikernel_step(); // 0ns
 
@@ -294,9 +291,12 @@ void functional_test_priority(PlicRtlWrapper& dut, test_runner& runner) {
 		minikernel_step(); // 210ns - 240ns
 	}
 
-	uint32_t first_itr = (prio_a) > (prio_b) ? id_a : id_b;
-	uint32_t second_itr = (prio_a) > (prio_b) ? id_b : id_a;
-	if((prio_a) == (prio_b)) {
+	uint32_t prio_a3 = prio_a&0b111;
+	uint32_t prio_b3 = prio_b&0b111;
+
+	uint32_t first_itr = (prio_a3) > (prio_b3) ? id_a : id_b;
+	uint32_t second_itr = (prio_a3) > (prio_b3) ? id_b : id_a;
+	if((prio_a3) == (prio_b3)) {
 		first_itr = id_a;
 		second_itr = id_b;
 	}
@@ -328,7 +328,6 @@ void functional_test_threshold(PlicRtlWrapper &dut, test_runner &runner) {
 //	uint32_t threshold = 7;
 	uint32_t prio = klee_int("priority");
 	uint32_t threshold = klee_int("priority threshold");
-	klee_assume(threshold > 0);
 
 	minikernel_step(); // 0ns
 

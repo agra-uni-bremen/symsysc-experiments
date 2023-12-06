@@ -227,15 +227,11 @@ void functional_test_priority(PLIC<1, numberInterruptsTlm, maxPriority>& plic_tl
 	// data
 	uint32_t id_a = 1;
 	uint32_t id_b = 2;
-	uint32_t prio_a = klee_int("prio_a");
-	uint32_t prio_b = klee_int("prio_b");
-	klee_assume(prio_a > 0);
-	klee_assume(prio_b > 0);
 
-	klee_assume(prio_a <= 7);
-	klee_assume(prio_b <= 7);
-//	uint32_t prio_a = 3;
-//	uint32_t prio_b = 1;
+//	uint32_t prio_a = klee_int("prio_a");
+//	uint32_t prio_b = klee_int("prio_b");
+	uint32_t prio_a = 7;
+	uint32_t prio_b = 8;
 
 	// TLM PLIC
 
@@ -295,14 +291,10 @@ void functional_test_threshold(PLIC<1, numberInterruptsTlm, maxPriority>& plic_t
 							   PlicRtlWrapper& plic_rtl, test_runner& runner_rtl) {
 	// data
 	uint32_t id = 1;
-//	uint32_t prio = 3;
-//	uint32_t threshold = 2;
-	uint32_t prio = klee_int("prio interrupt");
-	klee_assume(prio > 0);
-	klee_assume(prio <= 7);
-	uint32_t threshold = klee_int("priority threshold");
-	klee_assume(threshold > 0);
-	klee_assume(threshold <= 7);
+	uint32_t prio = 3;
+	uint32_t threshold = 2;
+//	uint32_t prio = klee_int("prio interrupt");
+//	uint32_t threshold = klee_int("priority threshold");
 
 	// TLM PLIC
 	plic_tlm.interrupt_priorities[id] = prio;
