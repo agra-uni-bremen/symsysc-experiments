@@ -1,6 +1,6 @@
 // Generator : SpinalHDL v1.9.3    git head : 029104c77a54c53f1edda327a3bea333f7d65fd9
 // Component : SBTaskHash
-// Git hash  : fc4247793ba87b2f5c3417fc493ac25f4f7d0c29
+// Git hash  : 7ae0e207cff4275f92117385345f4f10868f4585
 
 `timescale 1ns/1ps
 
@@ -31,15 +31,15 @@ module SBTaskHash (
   wire                mmioRegLogic_read;
   wire                mmioRegLogic_write;
   wire       [7:0]    mmioRegLogic_addr;
-  wire                when_SBTaskHash_l55;
-  wire                when_SBTaskHash_l58;
-  wire                when_SBTaskHash_l61;
-  wire                when_SBTaskHash_l63;
-  wire                when_SBTaskHash_l65;
-  wire                when_SBTaskHash_l70;
-  wire                when_SBTaskHash_l72;
-  wire                when_SBTaskHash_l74;
-  wire                when_SBTaskHash_l77;
+  wire                when_SBTaskHash_l32;
+  wire                when_SBTaskHash_l35;
+  wire                when_SBTaskHash_l38;
+  wire                when_SBTaskHash_l40;
+  wire                when_SBTaskHash_l42;
+  wire                when_SBTaskHash_l47;
+  wire                when_SBTaskHash_l49;
+  wire                when_SBTaskHash_l51;
+  wire                when_SBTaskHash_l54;
 
   assign _zz_sbDataOutputReg = regReadyBuf;
   TaskHash taskHash_1 (
@@ -61,15 +61,15 @@ module SBTaskHash (
   assign mmioRegLogic_read = ((io_sb_SBvalid && io_sel) && (! io_sb_SBwrite));
   assign mmioRegLogic_write = ((io_sb_SBvalid && io_sel) && io_sb_SBwrite);
   assign mmioRegLogic_addr = io_sb_SBaddress[7 : 0];
-  assign when_SBTaskHash_l55 = (mmioRegLogic_addr == 8'h00);
-  assign when_SBTaskHash_l58 = (mmioRegLogic_addr == 8'h04);
-  assign when_SBTaskHash_l61 = (mmioRegLogic_addr == 8'h08);
-  assign when_SBTaskHash_l63 = (mmioRegLogic_addr == 8'h0c);
-  assign when_SBTaskHash_l65 = (mmioRegLogic_addr == 8'h10);
-  assign when_SBTaskHash_l70 = (mmioRegLogic_addr == 8'h00);
-  assign when_SBTaskHash_l72 = (mmioRegLogic_addr == 8'h04);
-  assign when_SBTaskHash_l74 = (mmioRegLogic_addr == 8'h08);
-  assign when_SBTaskHash_l77 = (mmioRegLogic_addr == 8'h0c);
+  assign when_SBTaskHash_l32 = (mmioRegLogic_addr == 8'h00);
+  assign when_SBTaskHash_l35 = (mmioRegLogic_addr == 8'h04);
+  assign when_SBTaskHash_l38 = (mmioRegLogic_addr == 8'h08);
+  assign when_SBTaskHash_l40 = (mmioRegLogic_addr == 8'h0c);
+  assign when_SBTaskHash_l42 = (mmioRegLogic_addr == 8'h10);
+  assign when_SBTaskHash_l47 = (mmioRegLogic_addr == 8'h00);
+  assign when_SBTaskHash_l49 = (mmioRegLogic_addr == 8'h04);
+  assign when_SBTaskHash_l51 = (mmioRegLogic_addr == 8'h08);
+  assign when_SBTaskHash_l54 = (mmioRegLogic_addr == 8'h0c);
   assign io_sb_SBready = busCtrl_io_ready;
   assign io_sb_SBrdata = sbDataOutputReg;
   assign io_irq = regReadyBuf;
@@ -91,17 +91,17 @@ module SBTaskHash (
       end
       sbDataOutputReg <= 32'h00000000;
       if(mmioRegLogic_write) begin
-        if(when_SBTaskHash_l55) begin
+        if(when_SBTaskHash_l32) begin
           regA <= io_sb_SBwdata;
           regHashBuf <= 32'h00000000;
         end else begin
-          if(when_SBTaskHash_l58) begin
+          if(when_SBTaskHash_l35) begin
             regB <= io_sb_SBwdata;
             regHashBuf <= 32'h00000000;
           end else begin
-            if(!when_SBTaskHash_l61) begin
-              if(!when_SBTaskHash_l63) begin
-                if(when_SBTaskHash_l65) begin
+            if(!when_SBTaskHash_l38) begin
+              if(!when_SBTaskHash_l40) begin
+                if(when_SBTaskHash_l42) begin
                   regValid <= (io_sb_SBwdata == 32'h00000001);
                   regHashBuf <= 32'h00000000;
                 end
@@ -111,17 +111,17 @@ module SBTaskHash (
         end
       end else begin
         if(mmioRegLogic_read) begin
-          if(when_SBTaskHash_l70) begin
+          if(when_SBTaskHash_l47) begin
             sbDataOutputReg <= regA;
           end else begin
-            if(when_SBTaskHash_l72) begin
+            if(when_SBTaskHash_l49) begin
               sbDataOutputReg <= regB;
             end else begin
-              if(when_SBTaskHash_l74) begin
+              if(when_SBTaskHash_l51) begin
                 sbDataOutputReg <= regHashBuf;
                 regReadyBuf <= 1'b0;
               end else begin
-                if(when_SBTaskHash_l77) begin
+                if(when_SBTaskHash_l54) begin
                   sbDataOutputReg <= {31'd0, _zz_sbDataOutputReg};
                 end
               end
@@ -420,15 +420,15 @@ module TaskHashControl (
   localparam fsm_enumDef_stateHash = 3'd3;
   localparam fsm_enumDef_stateDone = 3'd4;
 
-  wire       [3:0]    _zz_fsm_iCount_valueNext;
+  wire       [2:0]    _zz_fsm_iCount_valueNext;
   wire       [0:0]    _zz_fsm_iCount_valueNext_1;
   wire                fsm_wantExit;
   reg                 fsm_wantStart;
   wire                fsm_wantKill;
   reg                 fsm_iCount_willIncrement;
   reg                 fsm_iCount_willClear;
-  reg        [3:0]    fsm_iCount_valueNext;
-  reg        [3:0]    fsm_iCount_value;
+  reg        [2:0]    fsm_iCount_valueNext;
+  reg        [2:0]    fsm_iCount_value;
   wire                fsm_iCount_willOverflowIfInc;
   wire                fsm_iCount_willOverflow;
   reg                 computeFSM_wantExit;
@@ -450,7 +450,7 @@ module TaskHashControl (
 
 
   assign _zz_fsm_iCount_valueNext_1 = fsm_iCount_willIncrement;
-  assign _zz_fsm_iCount_valueNext = {3'd0, _zz_fsm_iCount_valueNext_1};
+  assign _zz_fsm_iCount_valueNext = {2'd0, _zz_fsm_iCount_valueNext_1};
   `ifndef SYNTHESIS
   always @(*) begin
     case(io_datactrl_compute)
@@ -552,16 +552,12 @@ module TaskHashControl (
     endcase
   end
 
-  assign fsm_iCount_willOverflowIfInc = (fsm_iCount_value == 4'b1001);
+  assign fsm_iCount_willOverflowIfInc = (fsm_iCount_value == 3'b111);
   assign fsm_iCount_willOverflow = (fsm_iCount_willOverflowIfInc && fsm_iCount_willIncrement);
   always @(*) begin
-    if(fsm_iCount_willOverflow) begin
-      fsm_iCount_valueNext = 4'b0000;
-    end else begin
-      fsm_iCount_valueNext = (fsm_iCount_value + _zz_fsm_iCount_valueNext);
-    end
+    fsm_iCount_valueNext = (fsm_iCount_value + _zz_fsm_iCount_valueNext);
     if(fsm_iCount_willClear) begin
-      fsm_iCount_valueNext = 4'b0000;
+      fsm_iCount_valueNext = 3'b000;
     end
   end
 
@@ -702,7 +698,7 @@ module TaskHashControl (
   assign when_StateMachine_l253 = ((! (fsm_stateReg == fsm_enumDef_stateHash)) && (fsm_stateNext == fsm_enumDef_stateHash));
   always @(posedge clk or posedge reset) begin
     if(reset) begin
-      fsm_iCount_value <= 4'b0000;
+      fsm_iCount_value <= 3'b000;
       computeFSM_stateReg <= computeFSM_enumDef_BOOT;
       fsm_stateReg <= fsm_enumDef_BOOT;
     end else begin

@@ -27,8 +27,8 @@ class VSBTaskHash___024root final : public VerilatedModule {
     CData/*0:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl_io_ready;
     CData/*0:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl_io_datactrl_init;
     CData/*1:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl_io_datactrl_compute;
-    CData/*3:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext;
-    CData/*3:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value;
+    CData/*2:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext;
+    CData/*2:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value;
     CData/*1:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_stateReg;
     CData/*1:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_stateNext;
     CData/*2:0*/ SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_stateReg;

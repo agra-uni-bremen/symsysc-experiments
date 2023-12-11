@@ -95,8 +95,14 @@ VL_ATTR_COLD void VSBTaskHash___024root___settle__TOP__0(VSBTaskHash___024root* 
             }
         }
     }
+    vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext 
+        = (7U & ((IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value) 
+                 + (IData)(SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willIncrement)));
+    if (SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willClear) {
+        vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext = 0U;
+    }
     SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willOverflow 
-        = ((9U == (IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value)) 
+        = ((7U == (IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value)) 
            & (IData)(SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willIncrement));
     vlSelf->SBTaskHash__DOT__taskHash_1__DOT__data__DOT__s2hash 
         = (SBTaskHash__DOT__taskHash_1__DOT__data__DOT__mulHash 
@@ -119,13 +125,6 @@ VL_ATTR_COLD void VSBTaskHash___024root___settle__TOP__0(VSBTaskHash___024root* 
     }
     if (vlSelf->SBTaskHash__DOT__busCtrl__DOT__busStateMachine_wantStart) {
         vlSelf->SBTaskHash__DOT__busCtrl__DOT__busStateMachine_stateNext = 1U;
-    }
-    vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext 
-        = ((IData)(SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willOverflow)
-            ? 0U : (0xfU & ((IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value) 
-                            + (IData)(SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willIncrement))));
-    if (SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willClear) {
-        vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext = 0U;
     }
     SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_wantExit = 0U;
     if ((1U != (IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_stateReg))) {
@@ -206,8 +205,8 @@ VL_ATTR_COLD void VSBTaskHash___024root___ctor_var_reset(VSBTaskHash___024root* 
     vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl_io_ready = VL_RAND_RESET_I(1);
     vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl_io_datactrl_init = VL_RAND_RESET_I(1);
     vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl_io_datactrl_compute = VL_RAND_RESET_I(2);
-    vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext = VL_RAND_RESET_I(4);
-    vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value = VL_RAND_RESET_I(4);
+    vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext = VL_RAND_RESET_I(3);
+    vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value = VL_RAND_RESET_I(3);
     vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_stateReg = VL_RAND_RESET_I(2);
     vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_stateNext = VL_RAND_RESET_I(2);
     vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_stateReg = VL_RAND_RESET_I(3);

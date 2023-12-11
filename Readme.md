@@ -30,5 +30,5 @@ source setup.sh
 # How to verilate
 
 ```bash
-verilator --Mdir map --sc -LDFLAGS -Wno-attributes -Wno-WIDTH -Wno-UNOPTFLAT -Wno-CMPCONST -Wno-UNSIGNED peripherals/SBTaskMap.v
+verilator --Mdir hash --sc -LDFLAGS -Wno-attributes -Wno-WIDTH -Wno-UNOPTFLAT -Wno-CMPCONST -Wno-UNSIGNED peripherals/SBTaskHash.v
 ```

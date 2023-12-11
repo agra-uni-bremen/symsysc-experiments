@@ -191,8 +191,14 @@ VL_INLINE_OPT void VSBTaskHash___024root___sequent__TOP__0(VSBTaskHash___024root
             }
         }
     }
+    vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext 
+        = (7U & ((IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value) 
+                 + (IData)(SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willIncrement)));
+    if (SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willClear) {
+        vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext = 0U;
+    }
     SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willOverflow 
-        = ((9U == (IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value)) 
+        = ((7U == (IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value)) 
            & (IData)(SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willIncrement));
     vlSelf->SBTaskHash__DOT__busCtrl__DOT__busStateMachine_wantStart = 0U;
     if ((1U != (IData)(vlSelf->SBTaskHash__DOT__busCtrl__DOT__busStateMachine_stateReg))) {
@@ -201,13 +207,6 @@ VL_INLINE_OPT void VSBTaskHash___024root___sequent__TOP__0(VSBTaskHash___024root
         }
     }
     VL_ASSIGN_SII(1,vlSelf->io_irq, vlSelf->SBTaskHash__DOT__regReadyBuf);
-    vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext 
-        = ((IData)(SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willOverflow)
-            ? 0U : (0xfU & ((IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_value) 
-                            + (IData)(SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willIncrement))));
-    if (SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_willClear) {
-        vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__fsm_iCount_valueNext = 0U;
-    }
     SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_wantExit = 0U;
     if ((1U != (IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_stateReg))) {
         if ((2U != (IData)(vlSelf->SBTaskHash__DOT__taskHash_1__DOT__ctrl__DOT__computeFSM_stateReg))) {
