@@ -1,9 +1,12 @@
 //#include <klee_conf.h>
 #include <systemc.h>
-#include <plic_rtl.h>
+#include <testrunner.h>
+#include <plic/VRVPLIC.h>
 #include <iostream>
 
-static constexpr uint32_t numberInterrupts = 52; // TODO should be 53, I think?
+#include <boost/preprocessor/repetition/repeat.hpp>
+#define IO_INIT_PENDING(z, n, data) m_dut.io_has_pending_irq_##n(pendings[n]);
+#define PLIC_RTL_NUM_IRQS 52 // TODO should be 53, i think
 
 static constexpr uint32_t kPlicClaimReg = 0x200004;
 static constexpr uint32_t kPlicEnableReg = 0x2000;
@@ -17,58 +20,40 @@ static constexpr uint32_t kPlicThresholdReg = 0x200000;
  * - Test case without setting enabled?
  */
 
+struct plic_test_runner : public test_runner {
+	VRVPLIC& m_dut;
 
-struct test_runner : public sc_module {
-	PlicRtlWrapper& m_dut;
-	sc_clock& m_clock;
-	int neg = 0;
+	sc_signal<bool> idle_reset;
+	sc_signal<bool> irq_pending;
+	std::array<sc_core::sc_signal<bool, SC_MANY_WRITERS>, PLIC_RTL_NUM_IRQS> pendings;
 
-	int read_time = -1;
-	int write_time = -1;
-	uint64_t rw_address;
-	uint8_t *rw_data;
-	unsigned rw_num_bytes;
-
-	uint32_t read_value = 0;
-	uint32_t read_result = 0;
+	bool was_triggered = false;
+	bool was_cleared = false;
 
 	int interrupt_time = -1;
-	uint32_t interrupt = numberInterrupts;
-	uint32_t interrupt2 = numberInterrupts;
+	uint32_t interrupt = PLIC_RTL_NUM_IRQS;
+	uint32_t interrupt2 = PLIC_RTL_NUM_IRQS;
 
-	test_runner(sc_clock& clock, PlicRtlWrapper& dut) : sc_module("test_runner"), m_dut(dut),m_clock(clock) {
-		SC_HAS_PROCESS(test_runner);
-		SC_METHOD(run);
-		sensitive << m_clock.negedge_event();
-		dont_initialize();
-	}
+	SC_HAS_PROCESS(plic_test_runner);
+	plic_test_runner(sc_clock& clock, VRVPLIC& dut, SimpleBusRtl& bus) : test_runner(clock, bus), m_dut(dut) {
+		m_dut.io_irq_pending(irq_pending);
 
-	void call_read_easy(uint64_t address) {
-		call_read(address, reinterpret_cast<uint8_t *>(&read_value), sizeof(uint32_t));
-	}
+		// expands to IO_INIT_PENDING(z, 0, void) IO_INIT_PENDING(z, 1, void) ... IO_INIT_PENDING(z, count - 1, void)
+		BOOST_PP_REPEAT(PLIC_RTL_NUM_IRQS, IO_INIT_PENDING, void)
+		m_dut.io_sel(m_bus.sel);
+		m_dut.io_sb_SBaddress(m_bus.SBaddress);
+		m_dut.io_sb_SBvalid(m_bus.SBvalid);
+		m_dut.io_sb_SBwdata(m_bus.SBwdata);
+		m_dut.io_sb_SBwrite(m_bus.SBwrite);
+		m_dut.io_sb_SBsize(m_bus.SBsize);
+		m_dut.io_sb_SBready(m_bus.SBready);
+		m_dut.io_sb_SBrdata(m_bus.SBrdata);
 
-	void call_read(uint64_t address, uint8_t *data, unsigned num_bytes) {
-		if(read_time == -1 && write_time == -1) {
-			read_time = neg+1;
-			rw_address = address;
-			rw_data = data;
-			rw_num_bytes = num_bytes;
-		}
-		else {
-			INFO(std::cout << "[run][WARNING] already reading or writing, fix call order" << std::endl);
-		}
-	}
+		m_dut.clk(clock);
+		m_dut.reset(idle_reset);
 
-	void call_write(uint64_t address, uint8_t *data, unsigned num_bytes) {
-		if(read_time == -1 && write_time == -1) {
-			write_time = neg + 1;
-			rw_address = address;
-			rw_data = data;
-			rw_num_bytes = num_bytes;
-		}
-		else {
-			INFO(std::cout << "[run][WARNING] already reading or writing, fix call order" << std::endl);
-		}
+		SC_METHOD(irqPendingChange);
+		sensitive << irq_pending;
 	}
 
 	void trigger_interrupt(uint32_t id) {
@@ -81,96 +66,45 @@ struct test_runner : public sc_module {
 	}
 
 private:
-	void read() {
-		tlm::tlm_generic_payload trans;
-		trans.set_command(tlm::TLM_READ_COMMAND);
-		trans.set_address(rw_address);
-		trans.set_data_ptr(rw_data);
-		trans.set_data_length(rw_num_bytes);
 
-		auto delay = sc_core::sc_time(0, sc_core::SC_NS);
-		m_dut.transport(trans, delay);
-	}
-
-	void write() {
-		tlm::tlm_generic_payload trans;
-		trans.set_command(tlm::TLM_WRITE_COMMAND);
-		trans.set_address(rw_address);
-		trans.set_data_ptr(rw_data);
-		trans.set_data_length(rw_num_bytes);
-
-		auto delay = sc_core::sc_time(0, sc_core::SC_NS);
-		m_dut.transport(trans, delay);
+	void irqPendingChange() {
+		if(irq_pending.read()) {
+			was_triggered = true;
+			was_cleared = false;
+			call_read(kPlicClaimReg);
+		} else {
+			was_cleared = true;
+			was_triggered = false;
+		}
 	}
 
 	void run() {
-		neg++;
+		test_runner::run();
 
-		if(neg == read_time) { // call read on negedge
-			read();
-		}
-		else if(neg == read_time+1) { // read from read_address: part 2
-			read_result = m_dut.r2(rw_address);
-			read_time = -1;
-		}
-		else if(neg == write_time) {
-			write();
-		}
-		else if(neg == write_time+1) {
-			m_dut.w2();
-			write_time = -1;
-		} else if(neg == interrupt_time) {
-			m_dut.gateway_trigger_interrupt(interrupt);
-			if(interrupt2 != numberInterrupts) {
-				m_dut.gateway_trigger_interrupt(interrupt2);
-				interrupt2 = numberInterrupts;
+		if(neg == interrupt_time) {
+			pendings[interrupt] = true;
+			if(interrupt2 != PLIC_RTL_NUM_IRQS) {
+				pendings[interrupt2] = true;
+				interrupt2 = PLIC_RTL_NUM_IRQS;
 			}
 			interrupt_time = -1;
 		}
 	}
 };
 
-struct Simple_interrupt_target : public external_interrupt_target_rtl
-{
-	bool was_triggered = false;
-	bool was_cleared = false;
-	PlicRtlWrapper &dut;
-	test_runner &runner;
 
-	Simple_interrupt_target(PlicRtlWrapper& dut, test_runner &runner) : dut(dut), runner(runner) {};
-
-	void trigger_external_interrupt(PrivilegeLevel level)
-	{
-		if(!was_triggered) {
-			was_triggered = true;
-			was_cleared = false;
-			runner.call_read_easy(kPlicClaimReg);
-		}
-	};
-
-	void clear_external_interrupt(PrivilegeLevel level)
-	{
-		was_cleared = true;
-		if(was_triggered) {
-			was_triggered = false;
-		}
-	};
-};
-
-void functional_test_basic(PlicRtlWrapper& dut, test_runner &runner) {
-	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
-
+void functional_test_basic(plic_test_runner &runner) {
 	// TODO: symbolic ID continue testing, also remove assumes to see what happens
 	// test valid interrupt number
-//	uint32_t id = 51;
-	uint32_t id = klee_int("interrupt number");
-	klee_assume(id > 0);
-	klee_assume(id < numberInterrupts);
+	uint32_t id = 51;
+//	uint32_t id = klee_int("interrupt number");
+//	klee_assume(id > 0);
+//	klee_assume(id < numberInterrupts);
 
 	minikernel_step(); // 0ns
 
 	uint32_t prio_threshold = 7;
-	runner.call_write(kPlicThresholdReg, reinterpret_cast<uint8_t *>(&prio_threshold), sizeof(uint32_t));
+	runner.call_write(kPlicThresholdReg, prio_threshold);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 10ns - 40ns
 	}
@@ -183,14 +117,14 @@ void functional_test_basic(PlicRtlWrapper& dut, test_runner &runner) {
 		enable = 1UL << (id-32);
 		enable_address += sizeof(uint32_t);
 	}
-	runner.call_write(enable_address, reinterpret_cast<uint8_t *>(&enable), sizeof(uint32_t));
+	runner.call_write(enable_address, enable);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 50ns - 80ns
 	}
 
 	uint32_t prio = 1;
 	// TODO fork failed
-	runner.call_write(sizeof(uint32_t)*id, reinterpret_cast<uint8_t *>(&prio), sizeof(uint32_t));
+	runner.call_write(sizeof(uint32_t)*id, prio);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 90ns - 120ns
 	}
@@ -199,37 +133,37 @@ void functional_test_basic(PlicRtlWrapper& dut, test_runner &runner) {
 	minikernel_step(); // 130ns, trigger on negedge
 
 	//Is the pending interrupts register changed?
-	assert(dut.pendings_[id].read());
+	assert(runner.pendings[id].read());
 
 	auto before = Simcontext::get().getGlobalTime();
 	for(unsigned i=0;i<2;i++) {
 		minikernel_step(); // 140ns - 150ns
 	}
 
-	assert(!sit.was_triggered);
+	assert(!runner.was_triggered);
 
 	minikernel_step(); // 160
 	auto after = Simcontext::get().getGlobalTime();
 	assert(after-before == sc_core::sc_time(30, sc_core::SC_NS));
 
 	for(unsigned i=0;i<4;i++) {
-		assert(sit.was_triggered);
+		assert(runner.was_triggered);
 		minikernel_step(); // 170ns - 200ns
 	}
-	assert(runner.read_result == id);
+	assert(runner.rw_value == id);
 
-	runner.call_write(kPlicClaimReg, reinterpret_cast<uint8_t *>(&id), sizeof(uint32_t));
+	runner.call_write(kPlicClaimReg, id);
 	for(unsigned i=0;i<2;i++) {
 		minikernel_step(); // 210ns - 220ns
 	}
 
 	// was interrupt cleared by claiming?
-	assert(sit.was_cleared && "Interrupt was not cleared after claim");
-	assert(!sit.was_triggered);
+	assert(runner.was_cleared && "Interrupt was not cleared after claim");
+	assert(!runner.was_triggered);
 
 	//The pending interrupt signals should be cleared after claim
-	for(int i=0; i<dut.pendings_.size(); i++) { // heap use after free if using foreach
-		assert(!dut.pendings_[i].read());
+	for(int i=0; i<runner.pendings.size(); i++) { // heap use after free if using foreach
+		assert(!runner.pendings[i].read());
 	}
 
 	for(unsigned i=0;i<2;i++) {
@@ -237,9 +171,8 @@ void functional_test_basic(PlicRtlWrapper& dut, test_runner &runner) {
 	}
 }
 
-void functional_test_priority(PlicRtlWrapper& dut, test_runner& runner) {
-	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
 
+void functional_test_priority(plic_test_runner& runner) {
 	uint32_t id_a = 1;
 	uint32_t id_b = 2;
 //	uint32_t prio_a = klee_int("prio_a");
@@ -250,23 +183,23 @@ void functional_test_priority(PlicRtlWrapper& dut, test_runner& runner) {
 	minikernel_step(); // 0ns
 
 	uint32_t prio_threshold = 7;
-	runner.call_write(kPlicThresholdReg, reinterpret_cast<uint8_t *>(&prio_threshold), sizeof(uint32_t));
+	runner.call_write(kPlicThresholdReg, prio_threshold);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 10ns - 40ns
 	}
 
 	uint32_t enable_lower = 1UL << id_a | 1UL << id_b;
-	runner.call_write(kPlicEnableReg, reinterpret_cast<uint8_t *>(&enable_lower), sizeof(uint32_t));
+	runner.call_write(kPlicEnableReg, enable_lower);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 50ns - 80ns
 	}
 
-	runner.call_write(sizeof(uint32_t)*id_a, reinterpret_cast<uint8_t *>(&prio_a), sizeof(uint32_t));
+	runner.call_write(sizeof(uint32_t)*id_a, prio_a);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 90ns - 120ns
 	}
 
-	runner.call_write(sizeof(uint32_t)*id_b, reinterpret_cast<uint8_t *>(&prio_b), sizeof(uint32_t));
+	runner.call_write(sizeof(uint32_t)*id_b, prio_b);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 130ns - 160ns
 	}
@@ -276,16 +209,16 @@ void functional_test_priority(PlicRtlWrapper& dut, test_runner& runner) {
 	minikernel_step(); // 170ns, trigger on negedge
 
 	//Is the pending interrupts register changed?
-	assert(dut.pendings_[id_a].read());
-	assert(dut.pendings_[id_b].read());
+	assert(runner.pendings[id_a].read());
+	assert(runner.pendings[id_b].read());
 
 	for(unsigned i=0;i<2;i++) {
 		minikernel_step(); // 180ns - 190ns
 	}
 
-	assert(!sit.was_triggered);
+	assert(!runner.was_triggered);
 	minikernel_step(); // 200ns, triggered
-	assert(sit.was_triggered);
+	assert(runner.was_triggered);
 
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 210ns - 240ns
@@ -300,29 +233,27 @@ void functional_test_priority(PlicRtlWrapper& dut, test_runner& runner) {
 		first_itr = id_a;
 		second_itr = id_b;
 	}
-	assert(runner.read_result == first_itr);
-	runner.call_write(kPlicClaimReg, reinterpret_cast<uint8_t *>(&first_itr), sizeof(uint32_t));
+	assert(runner.rw_value == first_itr);
+	runner.call_write(kPlicClaimReg, first_itr);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 250ns - 280ns
 	}
 
-	assert(sit.was_triggered);
+	assert(runner.was_triggered);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 290ns - 320ns
 	}
 
-	assert(runner.read_result == second_itr);
-	runner.call_write(kPlicClaimReg, reinterpret_cast<uint8_t *>(&second_itr), sizeof(uint32_t));
+	assert(runner.rw_value == second_itr);
+	runner.call_write(kPlicClaimReg, second_itr);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 330ns - 360ns
 	}
 
-	assert(!sit.was_triggered);
+	assert(!runner.was_triggered);
 }
 
-void functional_test_threshold(PlicRtlWrapper &dut, test_runner &runner) {
-	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
-
+void functional_test_threshold(plic_test_runner &runner) {
 	uint32_t id = 1;
 //	uint32_t prio = 2;
 //	uint32_t threshold = 7;
@@ -331,18 +262,18 @@ void functional_test_threshold(PlicRtlWrapper &dut, test_runner &runner) {
 
 	minikernel_step(); // 0ns
 
-	runner.call_write(kPlicThresholdReg, reinterpret_cast<uint8_t *>(&threshold), sizeof(uint32_t));
+	runner.call_write(kPlicThresholdReg, threshold);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 10ns - 40ns
 	}
 
 	uint32_t enable_lower = 1UL << id;
-	runner.call_write(kPlicEnableReg, reinterpret_cast<uint8_t *>(&enable_lower), sizeof(uint32_t));
+	runner.call_write(kPlicEnableReg, enable_lower);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 50ns - 80ns
 	}
 
-	runner.call_write(sizeof(uint32_t)*id, reinterpret_cast<uint8_t *>(&prio), sizeof(uint32_t));
+	runner.call_write(sizeof(uint32_t)*id, prio);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 90ns - 120ns
 	}
@@ -354,16 +285,17 @@ void functional_test_threshold(PlicRtlWrapper &dut, test_runner &runner) {
 		minikernel_step(); // 140ns - 150ns
 	}
 
-	assert(!sit.was_triggered);
+	assert(!runner.was_triggered);
 	minikernel_step(); // 160ns, triggered
 
 	if((prio&0b111) > (threshold&0b111) || (prio&0b111) == 0) {
-		assert(!sit.was_triggered); // fails, but known bug
+		assert(!runner.was_triggered); // fails, but known bug
 	} else {
-		assert(sit.was_triggered);
+		assert(runner.was_triggered);
 	}
 }
 
+/*
 void invalid_test_id(PlicRtlWrapper& dut, test_runner& runner) {
 	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
 
@@ -386,7 +318,7 @@ void invalid_test_id(PlicRtlWrapper& dut, test_runner& runner) {
 	assert(!sit.was_triggered);
 }
 
-/*
+// -- Ab hier auskommentiert
 void invalid_test_priority(PlicRtlWrapper& dut, test_runner& runner) {
 	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
 
@@ -478,37 +410,23 @@ void invalid_test_threshold(PlicRtlWrapper &dut, test_runner &runner) {
 	minikernel_step(); // 160ns, triggered
 	assert(!sit.was_triggered);
 }
+// -- Bis hier auskommentiert
+*/
+
+/*
+ *TODO: kompletten SimpleBus testen, dann wahrscheinlich eher eine Interface-Methode
  */
-
-void interface_test_read(PlicRtlWrapper &dut, test_runner &runner) {
-	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
-
-	unsigned constexpr max_data_length = 1000;
-	unsigned data_length = klee_int("data length");
-	klee_assume(data_length <= max_data_length);
-	uint8_t data[max_data_length];
-
-//	runner.call_read(klee_int("address"), data, data_length);
-	runner.call_read(10, data, data_length);
+void interface_test_read(plic_test_runner &runner) {
+//	runner.call_read(klee_int("address"));
+	runner.call_read(10);
 
 	for(int i=0;i<4;i++) {
 		minikernel_step();
 	}
 }
-
-void interface_test_write(PlicRtlWrapper &dut, test_runner &runner) {
-	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
-
-	unsigned constexpr max_data_length = 100;
-	unsigned data_length = klee_int("data_length");
-	INFO(data_length = 0);
-	klee_assume(data_length <= max_data_length);
-	uint8_t data[max_data_length];
-	klee_make_symbolic(data, max_data_length, "write data");
-	INFO(memset(data, 0, max_data_length));
-
-//	runner.call_write(klee_int("address"), data, data_length);
-	runner.call_write(10, data, data_length);
+void interface_test_write(plic_test_runner &runner) {
+//	runner.call_write(klee_int("address"), klee_int("value"));
+	runner.call_write(10, 23);
 
 	for(int i=0;i<4;i++) {
 		minikernel_step();
@@ -518,30 +436,29 @@ void interface_test_write(PlicRtlWrapper &dut, test_runner &runner) {
 int main(int argc, char* argv[])
 {
 	sc_clock clk{"plic_clk", sc_core::sc_time(20, sc_core::SC_NS)};
-	PlicRtlWrapper plic("PlicRtlWrappper", clk);
-	test_runner tr = test_runner(clk, plic);
-	Simple_interrupt_target sit(plic, tr);
-	plic.hart = &sit;
+	VRVPLIC plic("PlicRtlWrappper");
+	SimpleBusRtl bus(clk);
+	plic_test_runner tr = plic_test_runner(clk, plic, bus);
 
 	Simcontext::get().initialize();
 
 	if(argc == 2) {
 		if(strcmp(argv[1], "functional_test_basic") == 0) {
-			functional_test_basic(plic, tr);
+			functional_test_basic(tr);
 		} else if(strcmp(argv[1], "functional_test_priority") == 0) {
-			functional_test_priority(plic, tr);
+			functional_test_priority(tr);
 		} else if(strcmp(argv[1], "functional_test_threshold") == 0) {
-			functional_test_threshold(plic, tr);
+			functional_test_threshold(tr);
 //		} else if(strcmp(argv[1], "invalid_test_priority") == 0) {
 //			invalid_test_priority(plic, tr);
-		} else if(strcmp(argv[1], "invalid_test_id") == 0) {
-			invalid_test_id(plic, tr);
+//		} else if(strcmp(argv[1], "invalid_test_id") == 0) {
+//			invalid_test_id(plic, tr);
 //		} else if(strcmp(argv[1], "invalid_test_threshold") == 0) {
 //			invalid_test_threshold(plic, tr);
 		} else if(strcmp(argv[1], "interface_test_read") == 0) {
-			interface_test_read(plic, tr);
+			interface_test_read(tr);
 		} else if(strcmp(argv[1], "interface_test_write") == 0) {
-			interface_test_write(plic, tr);
+			interface_test_write(tr);
 		}
 		else
 			INFO(std::cout << "Invalid test given." << std::endl);

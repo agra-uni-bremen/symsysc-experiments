@@ -68,8 +68,8 @@ struct Simple_interrupt_target : public external_interrupt_target
 void functional_test_basic(PLIC<1, numberInterrupts, maxPriority>& dut)
 {
 	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.target_harts[0]);
-//	uint32_t i = klee_int("interrupt number");
-	uint32_t i = 51;
+	uint32_t i = klee_int("interrupt number");
+//	uint32_t i = 51;
 
     dut.gateway_trigger_interrupt(i);
 

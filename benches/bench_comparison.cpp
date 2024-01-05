@@ -28,12 +28,9 @@ struct test_runner : public sc_module {
 
 	int read_time = -1;
 	int write_time = -1;
-	uint64_t rw_address;
-	uint8_t *rw_data;
-	unsigned rw_num_bytes;
 
-	uint32_t read_value = 0;
-	uint32_t read_result = 0;
+	uint64_t rw_address;
+	uint32_t rw_value = 0;
 
 	int interrupt_time = -1;
 	uint32_t interrupt = numberInterruptsTlm;
@@ -46,28 +43,21 @@ struct test_runner : public sc_module {
 		dont_initialize();
 	}
 
-	void call_read_easy(uint64_t address) {
-		call_read(address, reinterpret_cast<uint8_t *>(&read_value), sizeof(uint32_t));
-	}
-
-	void call_read(uint64_t address, uint8_t *data, unsigned num_bytes) {
+	void call_read(uint64_t address) {
 		if(read_time == -1 && write_time == -1) {
 			read_time = neg+1;
 			rw_address = address;
-			rw_data = data;
-			rw_num_bytes = num_bytes;
 		}
 		else {
 			INFO(std::cout << "[run][WARNING] already reading or writing, fix call order" << std::endl);
 		}
 	}
 
-	void call_write(uint64_t address, uint8_t *data, unsigned num_bytes) {
+	void call_write(uint64_t address, uint32_t value) {
 		if(read_time == -1 && write_time == -1) {
 			write_time = neg + 1;
 			rw_address = address;
-			rw_data = data;
-			rw_num_bytes = num_bytes;
+			rw_value = value;
 		}
 		else {
 			INFO(std::cout << "[run][WARNING] already reading or writing, fix call order" << std::endl);
@@ -84,43 +74,65 @@ struct test_runner : public sc_module {
 	}
 
 private:
-	void read() {
-		tlm::tlm_generic_payload trans;
-		trans.set_command(tlm::TLM_READ_COMMAND);
-		trans.set_address(rw_address);
-		trans.set_data_ptr(rw_data);
-		trans.set_data_length(rw_num_bytes);
-
-		auto delay = sc_core::sc_time(0, sc_core::SC_NS);
-		m_dut.transport(trans, delay);
+	void r1() {
+		//	wait(clk_.negedge_event());
+		m_dut.simple_bus_.sel = true;
+		m_dut.simple_bus_.SBaddress = rw_address;
+		m_dut.simple_bus_.SBvalid = true;
+		m_dut.simple_bus_.SBwdata = 0;
+		m_dut.simple_bus_.SBwrite = false;
+		//	wait(clk_.posedge_event());
+		//	wait(clk_.negedge_event());
 	}
 
-	void write() {
-		tlm::tlm_generic_payload trans;
-		trans.set_command(tlm::TLM_WRITE_COMMAND);
-		trans.set_address(rw_address);
-		trans.set_data_ptr(rw_data);
-		trans.set_data_length(rw_num_bytes);
+	void r2() {
+		// r1 first
+		// wait(clock.posedge())
+		// wait(clock.negedge())
+		m_dut.simple_bus_.SBaddress = 0;
+		m_dut.simple_bus_.SBvalid = false;
+		const uint32_t value = m_dut.simple_bus_.SBrdata.read();
+		m_dut.simple_bus_.sel = false;
 
-		auto delay = sc_core::sc_time(0, sc_core::SC_NS);
-		m_dut.transport(trans, delay);
+		rw_value = value; // TODO schauen ob oben direkt möglich
+		//	wait(clk_.posedge_event());
+	}
+
+	void w1() {
+		// wait(clock.negedge())
+		m_dut.simple_bus_.sel = true;
+		m_dut.simple_bus_.SBaddress = rw_address;
+		m_dut.simple_bus_.SBvalid = true;
+		m_dut.simple_bus_.SBwdata = rw_value;
+		m_dut.simple_bus_.SBwrite = true;
+		// wait(clock.posedge())
+		// wait(clock.negedge())
+	}
+
+	void w2() {
+		// w1 first
+		// wait(clock.posedge())
+		// wait(clock.negedge())
+		m_dut.simple_bus_.SBvalid = false;
+		m_dut.simple_bus_.sel = false;
+		// wait(clock.posedge())
 	}
 
 	void run() {
 		neg++;
 
 		if(neg == read_time) { // call read on negedge
-			read();
+			r1();
 		}
 		else if(neg == read_time+1) { // read from read_address: part 2
-			read_result = m_dut.r2(rw_address);
+			r2();
 			read_time = -1;
 		}
 		else if(neg == write_time) {
-			write();
+			w1();
 		}
 		else if(neg == write_time+1) {
-			m_dut.w2();
+			w2();
 			write_time = -1;
 		} else if(neg == interrupt_time) {
 			m_dut.gateway_trigger_interrupt(interrupt);
@@ -147,7 +159,7 @@ struct target_rtl : public external_interrupt_target_rtl
 		if(!was_triggered) {
 			was_triggered = true;
 			was_cleared = false;
-			runner.call_read_easy(kPlicClaimReg);
+			runner.call_read(kPlicClaimReg);
 		}
 	};
 
@@ -228,10 +240,10 @@ void functional_test_priority(PLIC<1, numberInterruptsTlm, maxPriority>& plic_tl
 	uint32_t id_a = 1;
 	uint32_t id_b = 2;
 
-//	uint32_t prio_a = klee_int("prio_a");
-//	uint32_t prio_b = klee_int("prio_b");
-	uint32_t prio_a = 7;
-	uint32_t prio_b = 8;
+	uint32_t prio_a = klee_int("prio_a");
+	uint32_t prio_b = klee_int("prio_b");
+//	uint32_t prio_a = 7;
+//	uint32_t prio_b = 6;
 
 	// TLM PLIC
 
@@ -251,23 +263,23 @@ void functional_test_priority(PLIC<1, numberInterruptsTlm, maxPriority>& plic_tl
 	// RTL PLIC
 
 	uint32_t prio_threshold = 7;
-	runner_rtl.call_write(kPlicThresholdReg, reinterpret_cast<uint8_t *>(&prio_threshold), sizeof(uint32_t));
+	runner_rtl.call_write(kPlicThresholdReg, prio_threshold);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
 
 	uint32_t enable_lower = 1UL << id_a | 1UL << id_b;
-	runner_rtl.call_write(kPlicEnableReg, reinterpret_cast<uint8_t *>(&enable_lower), sizeof(uint32_t));
+	runner_rtl.call_write(kPlicEnableReg, enable_lower);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
 
-	runner_rtl.call_write(sizeof(uint32_t)*id_a, reinterpret_cast<uint8_t *>(&prio_a), sizeof(uint32_t));
+	runner_rtl.call_write(sizeof(uint32_t)*id_a, prio_a);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
 
-	runner_rtl.call_write(sizeof(uint32_t)*id_b, reinterpret_cast<uint8_t *>(&prio_b), sizeof(uint32_t));
+	runner_rtl.call_write(sizeof(uint32_t)*id_b, prio_b);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
@@ -278,23 +290,23 @@ void functional_test_priority(PLIC<1, numberInterruptsTlm, maxPriority>& plic_tl
 	for(unsigned i=0;i<8;i++) { // trigger interrupt and process read
 		minikernel_step();
 	}
-	assert(runner_rtl.read_result == first_itr_tlm);
+	assert(runner_rtl.rw_value == first_itr_tlm);
 
-	runner_rtl.call_write(kPlicClaimReg, reinterpret_cast<uint8_t *>(&first_itr_tlm), sizeof(uint32_t));
+	runner_rtl.call_write(kPlicClaimReg, first_itr_tlm);
 	for(unsigned i=0;i<8;i++) { // process write and read next interrupt
 		minikernel_step();
 	}
-	assert(runner_rtl.read_result == second_itr_tlm);
+	assert(runner_rtl.rw_value == second_itr_tlm);
 }
 
 void functional_test_threshold(PLIC<1, numberInterruptsTlm, maxPriority>& plic_tlm,
 							   PlicRtlWrapper& plic_rtl, test_runner& runner_rtl) {
 	// data
 	uint32_t id = 1;
-	uint32_t prio = 3;
-	uint32_t threshold = 2;
-//	uint32_t prio = klee_int("prio interrupt");
-//	uint32_t threshold = klee_int("priority threshold");
+//	uint32_t prio = 3;
+//	uint32_t threshold = 2;
+	uint32_t prio = klee_int("prio interrupt");
+	uint32_t threshold = klee_int("priority threshold");
 
 	// TLM PLIC
 	plic_tlm.interrupt_priorities[id] = prio;
@@ -306,18 +318,18 @@ void functional_test_threshold(PLIC<1, numberInterruptsTlm, maxPriority>& plic_t
 	uint32_t itr_tlm = plic_tlm.hart_get_next_pending_interrupt(0, true);
 
 	// RTL PLIC
-	runner_rtl.call_write(kPlicThresholdReg, reinterpret_cast<uint8_t *>(&threshold), sizeof(uint32_t));
+	runner_rtl.call_write(kPlicThresholdReg, threshold);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
 
 	uint32_t enable_lower = 1UL << id;
-	runner_rtl.call_write(kPlicEnableReg, reinterpret_cast<uint8_t *>(&enable_lower), sizeof(uint32_t));
+	runner_rtl.call_write(kPlicEnableReg, enable_lower);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
 
-	runner_rtl.call_write(sizeof(uint32_t)*id, reinterpret_cast<uint8_t *>(&prio), sizeof(uint32_t));
+	runner_rtl.call_write(sizeof(uint32_t)*id, prio);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
@@ -327,7 +339,7 @@ void functional_test_threshold(PLIC<1, numberInterruptsTlm, maxPriority>& plic_t
 		minikernel_step();
 	}
 
-	assert(runner_rtl.read_result == itr_tlm); // fails
+	assert(runner_rtl.rw_value == itr_tlm); // fails
 }
 
 int main(int argc, char* argv[])
