@@ -1,7 +1,10 @@
 
 #include <stdint.h>
 #include <map_tlm.h>
-#include <map_rtl.h>
+#include <map/VSBTaskMap.h>
+#include <map/VSBTaskMap___024root.h>
+#include <simple_bus_rtl.h>
+#include <testrunner.h>
 
 static constexpr uint32_t mAddr = 0x00;
 static constexpr uint32_t mWdat = 0x04;
@@ -12,93 +15,47 @@ static constexpr uint32_t valid = 0x14;
 static constexpr uint32_t ready = 0x18;
 
 
-struct test_runner : public sc_module {
-	MapRtlWrapper& m_dut;
-	sc_clock& m_clock;
-	int neg = 0;
+struct map_test_runner : public test_runner {
+	VSBTaskMap map;
+	sc_signal<bool> idle_reset;
+	sc_signal<bool> irq;
 
-	int read_time = -1;
-	int write_time = -1;
-	uint64_t rw_address;
-	uint8_t *rw_data;
-	unsigned rw_num_bytes;
+	uint32_t result;
 
-	uint32_t read_value = 0;
-	uint32_t read_result = 0;
+	SC_HAS_PROCESS(map_test_runner);
+	explicit map_test_runner(sc_clock& clock) : test_runner(clock), map{"map rtl"}, irq{"map rtl irq"} {
+		map.clk(clock);
 
-	test_runner(sc_clock& clock, MapRtlWrapper& dut) : sc_module("test_runner"), m_dut(dut),m_clock(clock) {
-		SC_HAS_PROCESS(test_runner);
-		SC_METHOD(run);
-		sensitive << m_clock.negedge_event();
-		dont_initialize();
-	}
+		irq = false;
+		map.io_irq(irq);
+		map.reset(idle_reset);
 
-	void call_read_easy(uint64_t address) {
-		call_read(address, reinterpret_cast<uint8_t *>(&read_value), sizeof(uint32_t));
-	}
-
-	void call_read(uint64_t address, uint8_t *data, unsigned num_bytes) {
-		if(read_time == -1 && write_time == -1) {
-			read_time = neg+1;
-			rw_address = address;
-			rw_data = data;
-			rw_num_bytes = num_bytes;
-		}
-		else {
-			INFO(std::cout << "[run][WARNING] already reading or writing, fix call order" << std::endl);
-		}
-	}
-
-	void call_write(uint64_t address, uint8_t *data, unsigned num_bytes) {
-		if(read_time == -1 && write_time == -1) {
-			write_time = neg + 1;
-			rw_address = address;
-			rw_data = data;
-			rw_num_bytes = num_bytes;
-		}
-		else {
-			INFO(std::cout << "[run][WARNING] already reading or writing, fix call order" << std::endl);
-		}
+		map.io_sel(m_bus.sel);
+		map.io_sb_SBaddress(m_bus.SBaddress);
+		map.io_sb_SBvalid(m_bus.SBvalid);
+		map.io_sb_SBwdata(m_bus.SBwdata);
+		map.io_sb_SBwrite(m_bus.SBwrite);
+		map.io_sb_SBsize(m_bus.SBsize);
+		map.io_sb_SBready(m_bus.SBready);
+		map.io_sb_SBrdata(m_bus.SBrdata);
 	}
 
 private:
-	void read() {
-		tlm::tlm_generic_payload trans;
-		trans.set_command(tlm::TLM_READ_COMMAND);
-		trans.set_address(rw_address);
-		trans.set_data_ptr(rw_data);
-		trans.set_data_length(rw_num_bytes);
-
-		auto delay = sc_core::sc_time(0, sc_core::SC_NS);
-		m_dut.transport(trans, delay);
-	}
-
-	void write() {
-		tlm::tlm_generic_payload trans;
-		trans.set_command(tlm::TLM_WRITE_COMMAND);
-		trans.set_address(rw_address);
-		trans.set_data_ptr(rw_data);
-		trans.set_data_length(rw_num_bytes);
-
-		auto delay = sc_core::sc_time(0, sc_core::SC_NS);
-		m_dut.transport(trans, delay);
-	}
-
-	void run() {
+	void run() override {
 		neg++;
 
 		if(neg == read_time) { // call read on negedge
-			read();
+			m_bus.r1(rw_address);
 		}
 		else if(neg == read_time+1) { // read from read_address: part 2
-			read_result = m_dut.r2(rw_address);
+			result = map.rootp->SBTaskMap__DOT__sbDataOutputReg;
 			read_time = -1;
 		}
 		else if(neg == write_time) {
-			write();
+			m_bus.w1(rw_address, rw_value);
 		}
 		else if(neg == write_time+1) {
-			m_dut.w2();
+			m_bus.w2();
 			write_time = -1;
 		}
 	}
@@ -120,15 +77,14 @@ void functional_tlm_basic(map_tlm &dut_tlm) {
 //	uint32_t wdat[] = {1,2,3,4,5,6,7,8};
 	uint32_t wdat[8];
 	klee_make_symbolic(wdat, sizeof(wdat), "write data");
-
 //	uint32_t map_val = 7;
 	uint32_t map_val = klee_int("mapping value");
+	dut_tlm.mapV = map_val;
 
 	uint32_t enable = 1;
 	for(int i=0;i<8;i++) {
 		dut_tlm.mAddr = i;
 		dut_tlm.mWdat = wdat[i];
-		dut_tlm.mapV = map_val;
 
 		write_tlm(dut_tlm, mWREn, reinterpret_cast<uint8_t *>(&enable));
 	}
@@ -146,37 +102,36 @@ void functional_tlm_basic(map_tlm &dut_tlm) {
 	}
 }
 
-void functional_rtl_basic(MapRtlWrapper &dut_rtl, test_runner &tr) {
+void functional_rtl_basic(map_test_runner &tr) {
 //	uint32_t wdat[] = {1,2,3,4,5,6,7,8};
 	uint32_t wdat[8];
 	klee_make_symbolic(wdat, sizeof(wdat), "write data");
-
 //	uint32_t map_val = 10;
 	uint32_t map_val = klee_int("mapping value");
 
-	tr.call_write(mapV, reinterpret_cast<uint8_t *>(&map_val), sizeof(uint32_t ));
+	tr.call_write(mapV, map_val);
 	for(int i=0;i<4;i++) {
 		minikernel_step();
 	}
 
 	uint32_t wen = 1;
 	for(int i=0;i<8;i++) {
-		tr.call_write(mAddr, reinterpret_cast<uint8_t *>(&i), sizeof(uint32_t));
-		for (int j = 0; j < 4; j++) {
+		tr.call_write(mAddr, i);
+		for (int j=0; j<4; j++) {
 			minikernel_step();
 		}
-		tr.call_write(mWdat, reinterpret_cast<uint8_t *>(&wdat[i]), sizeof(uint32_t));
-		for (int j = 0; j < 4; j++) {
+		tr.call_write(mWdat,wdat[i]);
+		for (int j=0; j<4; j++) {
 			minikernel_step();
 		}
-		tr.call_write(mWREn, reinterpret_cast<uint8_t *>(&wen), sizeof(uint32_t));
-		for (int j = 0; j < 4; j++) {
+		tr.call_write(mWREn, wen);
+		for (int j=0; j<4; j++) {
 			minikernel_step();
 		}
 	}
 
 	uint32_t valid_val = 1;
-	tr.call_write(valid, reinterpret_cast<uint8_t *>(&valid_val), sizeof(uint32_t));
+	tr.call_write(valid, valid_val);
 	for(int i=0;i<4;i++) {
 		minikernel_step();
 	}
@@ -187,25 +142,25 @@ void functional_rtl_basic(MapRtlWrapper &dut_rtl, test_runner &tr) {
 
 	int32_t ref_vals[] = {(int32_t)wdat[0],(int32_t)wdat[1],(int32_t)wdat[2],(int32_t)wdat[3],(int32_t)wdat[4],(int32_t)wdat[5],(int32_t)wdat[6],(int32_t)wdat[7]};
 	task_map_f(8, ref_vals, map_val);
-	for(int j=0;j<8;j++) {
-		tr.call_write(mAddr, reinterpret_cast<uint8_t *>(&j), sizeof(uint32_t));
-		for (int i = 0; i < 4; i++) { // write address
+	for(int i=0;i<8;i++) {
+		tr.call_write(mAddr, i);
+		for (int j=0; j<4; j++) { // write address
 			minikernel_step();
 		}
-		tr.call_read_easy(mRdat);
-		for (int i = 0; i < 4; i++) { // read
+		tr.call_read(mRdat);
+		for (int j=0; j<4; j++) { // read
 			minikernel_step();
 		}
-		assert(tr.read_result == ref_vals[j]);
+		assert(tr.result == ref_vals[i]);
 	}
+
 }
 
-void comparison_basic(map_tlm &dut_tlm, MapRtlWrapper &dut_rtl, test_runner &tr) {
+void comparison_basic(map_tlm &dut_tlm, map_test_runner &tr) {
 	// data
 //	uint32_t wdat[] = {1,2,3,4,5,6,7,8};
 	uint32_t wdat[8];
 	klee_make_symbolic(wdat, sizeof(wdat), "write data");
-
 //	uint32_t map_val = 7;
 	uint32_t map_val = klee_int("mapping value");
 
@@ -231,27 +186,27 @@ void comparison_basic(map_tlm &dut_tlm, MapRtlWrapper &dut_rtl, test_runner &tr)
 	}
 
 	// RTL
-	tr.call_write(mapV, reinterpret_cast<uint8_t *>(&map_val), sizeof(uint32_t ));
+	tr.call_write(mapV, map_val);
 	for(int i=0;i<4;i++) {
 		minikernel_step();
 	}
 
 	for(int i=0;i<8;i++) {
-		tr.call_write(mAddr, reinterpret_cast<uint8_t *>(&i), sizeof(uint32_t));
-		for (int j = 0; j < 4; j++) {
+		tr.call_write(mAddr, i);
+		for (int j=0; j<4; j++) {
 			minikernel_step();
 		}
-		tr.call_write(mWdat, reinterpret_cast<uint8_t *>(&wdat[i]), sizeof(uint32_t));
-		for (int j = 0; j < 4; j++) {
+		tr.call_write(mWdat, wdat[i]);
+		for (int j=0; j<4; j++) {
 			minikernel_step();
 		}
-		tr.call_write(mWREn, reinterpret_cast<uint8_t *>(&enable), sizeof(uint32_t));
-		for (int j = 0; j < 4; j++) {
+		tr.call_write(mWREn, enable);
+		for (int j=0; j<4; j++) {
 			minikernel_step();
 		}
 	}
 
-	tr.call_write(valid, reinterpret_cast<uint8_t *>(&valid_val), sizeof(uint32_t));
+	tr.call_write(valid, valid_val);
 	for(int i=0;i<4;i++) {
 		minikernel_step();
 	}
@@ -260,16 +215,16 @@ void comparison_basic(map_tlm &dut_tlm, MapRtlWrapper &dut_rtl, test_runner &tr)
 		minikernel_step();
 	}
 
-	for(int j=0;j<8;j++) {
-		tr.call_write(mAddr, reinterpret_cast<uint8_t *>(&j), sizeof(uint32_t));
-		for (int i = 0; i < 4; i++) { // write address
+	for(int i=0;i<8;i++) {
+		tr.call_write(mAddr, i);
+		for (int j=0; j<4; j++) {
 			minikernel_step();
 		}
-		tr.call_read_easy(mRdat);
-		for (int i = 0; i < 4; i++) { // read
+		tr.call_read(mRdat);
+		for (int j=0; j<4; j++) {
 			minikernel_step();
 		}
-		assert(tr.read_result == tlm_res[j]);
+		assert(tr.result == tlm_res[i]);
 	}
 }
 
@@ -278,8 +233,7 @@ int main(int argc, char* argv[])
 	map_tlm dut_tlm("map TLM");
 
 	sc_clock clk{"map clk", sc_core::sc_time(20, sc_core::SC_NS)};
-	MapRtlWrapper dut_rtl("map rtl", clk);
-	test_runner tr = test_runner(clk,dut_rtl);
+	map_test_runner tr(clk);
 
 	Simcontext::get().initialize();
 	minikernel_step(); // 0ns
@@ -288,9 +242,9 @@ int main(int argc, char* argv[])
 		if(strcmp(argv[1], "functional_tlm_basic") == 0) {
 			functional_tlm_basic(dut_tlm);
 		} else if(strcmp(argv[1], "functional_rtl_basic") == 0) {
-			functional_rtl_basic(dut_rtl,tr);
+			functional_rtl_basic(tr);
 		} else if(strcmp(argv[1], "comparison_basic") == 0) {
-			comparison_basic(dut_tlm,dut_rtl,tr);
+			comparison_basic(dut_tlm,tr);
 		}
 		else
 			INFO(std::cout << "Invalid test given." << std::endl);

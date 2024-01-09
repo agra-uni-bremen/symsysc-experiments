@@ -2,11 +2,16 @@
 #include <systemc.h>
 #include <testrunner.h>
 #include <plic/VRVPLIC.h>
+#include <plic/VRVPLIC___024root.h>
 #include <iostream>
 
 #include <boost/preprocessor/repetition/repeat.hpp>
 #define IO_INIT_PENDING(z, n, data) m_dut.io_has_pending_irq_##n(pendings[n]);
-#define PLIC_RTL_NUM_IRQS 52 // TODO should be 53, i think
+#define PLIC_RTL_NUM_IRQS 53
+
+#define RESET_PENDING(z, n, data)                                                                                      \
+	if (m_dut.rootp->RVPLIC__DOT__pending_interrupts_##n)                                                              \
+		pendings[n] = false;
 
 static constexpr uint32_t kPlicClaimReg = 0x200004;
 static constexpr uint32_t kPlicEnableReg = 0x2000;
@@ -21,7 +26,7 @@ static constexpr uint32_t kPlicThresholdReg = 0x200000;
  */
 
 struct plic_test_runner : public test_runner {
-	VRVPLIC& m_dut;
+	VRVPLIC m_dut;
 
 	sc_signal<bool> idle_reset;
 	sc_signal<bool> irq_pending;
@@ -35,7 +40,7 @@ struct plic_test_runner : public test_runner {
 	uint32_t interrupt2 = PLIC_RTL_NUM_IRQS;
 
 	SC_HAS_PROCESS(plic_test_runner);
-	plic_test_runner(sc_clock& clock, VRVPLIC& dut, SimpleBusRtl& bus) : test_runner(clock, bus), m_dut(dut) {
+	explicit plic_test_runner(sc_clock& clock) : test_runner(clock), m_dut{"rtl plic"} {
 		m_dut.io_irq_pending(irq_pending);
 
 		// expands to IO_INIT_PENDING(z, 0, void) IO_INIT_PENDING(z, 1, void) ... IO_INIT_PENDING(z, count - 1, void)
@@ -52,6 +57,9 @@ struct plic_test_runner : public test_runner {
 		m_dut.clk(clock);
 		m_dut.reset(idle_reset);
 
+		SC_METHOD(resetPendings);
+		sensitive << clock.negedge_event();
+
 		SC_METHOD(irqPendingChange);
 		sensitive << irq_pending;
 	}
@@ -66,6 +74,10 @@ struct plic_test_runner : public test_runner {
 	}
 
 private:
+
+	void resetPendings() {
+		BOOST_PP_REPEAT(PLIC_RTL_NUM_IRQS, RESET_PENDING, void)
+	}
 
 	void irqPendingChange() {
 		if(irq_pending.read()) {
@@ -82,8 +94,9 @@ private:
 		test_runner::run();
 
 		if(neg == interrupt_time) {
-			pendings[interrupt] = true;
-			if(interrupt2 != PLIC_RTL_NUM_IRQS) {
+			if(interrupt < PLIC_RTL_NUM_IRQS)
+				pendings[interrupt] = true;
+			if(interrupt2 < PLIC_RTL_NUM_IRQS) {
 				pendings[interrupt2] = true;
 				interrupt2 = PLIC_RTL_NUM_IRQS;
 			}
@@ -94,43 +107,52 @@ private:
 
 
 void functional_test_basic(plic_test_runner &runner) {
+	std::cout << "begin test" << std::endl;
 	// TODO: symbolic ID continue testing, also remove assumes to see what happens
 	// test valid interrupt number
-	uint32_t id = 51;
+	uint32_t id = 30;
 //	uint32_t id = klee_int("interrupt number");
 //	klee_assume(id > 0);
-//	klee_assume(id < numberInterrupts);
+//	klee_assume(id < PLIC_RTL_NUM_IRQS);
 
 	minikernel_step(); // 0ns
 
+	std::cout << "before writing threshold" << std::endl;
 	uint32_t prio_threshold = 7;
 	runner.call_write(kPlicThresholdReg, prio_threshold);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 10ns - 40ns
 	}
+	std::cout << "after writing threshold" << std::endl;
 
 	uint32_t enable = 0;
 	uint32_t enable_address = kPlicEnableReg;
 	if(id > 0 && id < 32) { // enable lower
 		enable = 1UL << id;
-	} else if(id >= 32 && id <= 51) { // enable upper
+	} else if(id >= 32 && id < PLIC_RTL_NUM_IRQS) { // enable upper
 		enable = 1UL << (id-32);
 		enable_address += sizeof(uint32_t);
 	}
+	std::cout << "before writing enable" << std::endl;
 	runner.call_write(enable_address, enable);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 50ns - 80ns
 	}
+	std::cout << "after writing enable" << std::endl;
 
 	uint32_t prio = 1;
 	// TODO fork failed
+	std::cout << "before writing prio" << std::endl;
 	runner.call_write(sizeof(uint32_t)*id, prio);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 90ns - 120ns
 	}
+	std::cout << "after writing prio" << std::endl;
 
 	runner.trigger_interrupt(id);
+	std::cout << "after initial trigger" << std::endl;
 	minikernel_step(); // 130ns, trigger on negedge
+	std::cout << "after processing trigger" << std::endl;
 
 	//Is the pending interrupts register changed?
 	assert(runner.pendings[id].read());
@@ -146,16 +168,19 @@ void functional_test_basic(plic_test_runner &runner) {
 	auto after = Simcontext::get().getGlobalTime();
 	assert(after-before == sc_core::sc_time(30, sc_core::SC_NS));
 
+	std::cout << "after triggered, before processing response" << std::endl;
 	for(unsigned i=0;i<4;i++) {
 		assert(runner.was_triggered);
 		minikernel_step(); // 170ns - 200ns
 	}
 	assert(runner.rw_value == id);
 
+	std::cout << "before writing claim" << std::endl;
 	runner.call_write(kPlicClaimReg, id);
 	for(unsigned i=0;i<2;i++) {
 		minikernel_step(); // 210ns - 220ns
 	}
+	std::cout << "after writing claim" << std::endl;
 
 	// was interrupt cleared by claiming?
 	assert(runner.was_cleared && "Interrupt was not cleared after claim");
@@ -169,16 +194,17 @@ void functional_test_basic(plic_test_runner &runner) {
 	for(unsigned i=0;i<2;i++) {
 		minikernel_step(); // 230ns - 240ns, second part of write
 	}
+	std::cout << "done" << std::endl;
 }
 
 
 void functional_test_priority(plic_test_runner& runner) {
 	uint32_t id_a = 1;
 	uint32_t id_b = 2;
-//	uint32_t prio_a = klee_int("prio_a");
-//	uint32_t prio_b = klee_int("prio_b");
-	uint32_t prio_a = 3;
-	uint32_t prio_b = 1;
+	uint32_t prio_a = klee_int("prio_a");
+	uint32_t prio_b = klee_int("prio_b");
+//	uint32_t prio_a = 3;
+//	uint32_t prio_b = 1;
 
 	minikernel_step(); // 0ns
 
@@ -436,9 +462,7 @@ void interface_test_write(plic_test_runner &runner) {
 int main(int argc, char* argv[])
 {
 	sc_clock clk{"plic_clk", sc_core::sc_time(20, sc_core::SC_NS)};
-	VRVPLIC plic("PlicRtlWrappper");
-	SimpleBusRtl bus(clk);
-	plic_test_runner tr = plic_test_runner(clk, plic, bus);
+	plic_test_runner tr(clk);
 
 	Simcontext::get().initialize();
 

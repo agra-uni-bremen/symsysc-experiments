@@ -1,7 +1,9 @@
 
 #include <stdint.h>
 #include <hash_tlm.h>
-#include <hash_rtl.h>
+#include <testrunner.h>
+#include <hash/VSBTaskHash.h>
+#include <hash/VSBTaskHash___024root.h>
 
 static constexpr uint32_t addrA = 0x00;
 static constexpr uint32_t addrB = 0x04;
@@ -10,114 +12,357 @@ static constexpr uint32_t addrReady = 0x0c;
 static constexpr uint32_t addrValid = 0x10;
 
 
-struct test_runner : public sc_module {
-	HashRtlWrapper& m_dut;
+struct hash_basic : public sc_module {
+	sc_in<uint32_t> io_sb_SBaddress;
+	sc_in<uint32_t> io_sb_SBwdata;
+	sc_out<uint32_t> io_sb_SBrdata;
+	sc_in<bool> io_sb_SBvalid;
+	sc_in<bool> io_sb_SBwrite;
+	sc_in<uint32_t> io_sb_SBsize;
+	sc_out<bool> io_sb_SBready;
+
+	sc_in<bool> io_sel;
+	
+	sc_out<bool> io_irq;
+	sc_in<bool> clk;
+	
+	sc_signal<uint32_t,SC_MANY_WRITERS> res_ugly;
+
+	uint32_t a;
+	uint32_t b;
+	uint32_t res;
+	bool has_res = false;
+
+	SC_HAS_PROCESS(hash_basic);
+	hash_basic() : sc_module("hash rtl basic")
+	, io_sb_SBaddress("address")
+	, io_sb_SBwdata("wdata")
+	, io_sb_SBrdata("rdata")
+	, io_sb_SBvalid()
+	, io_sb_SBwrite()
+	, io_sb_SBsize("size")
+	, io_sb_SBready("ready")
+	, io_sel()
+	, io_irq("irq")
+	, res_ugly{"result without sc out"}
+	, clk() {
+		a = 0;
+		b = 0;
+		res = 0;
+
+		SC_METHOD(update);
+		sensitive << io_sb_SBvalid;
+		sensitive << clk;
+	}
+
+	void update() {
+		if(io_sb_SBvalid.read()) {
+			if (!has_res && io_sb_SBwrite.read() && io_sb_SBaddress.read() == 0x10 && io_sb_SBwdata.read() == 1) {
+				res = task_hash_f(a, b);
+				has_res = true;
+				io_irq.write(true);
+			} else if (io_sb_SBwrite.read() && io_sb_SBaddress.read() == 0x00) {
+				a = io_sb_SBwdata.read();
+			} else if (io_sb_SBwrite.read() && io_sb_SBaddress.read() == 0x04) {
+				b = io_sb_SBwdata.read();
+			} else if (!io_sb_SBwrite.read() && io_sb_SBaddress.read() == 0x08) {
+				io_irq.write(false);
+				//io_sb_SBrdata.write(res);
+				io_sb_SBrdata.write(0);
+				res_ugly.write(res);
+			}
+		}
+	}
+};
+
+struct babyrunner : public sc_module {
+	hash_basic m_dut;
+	SimpleBusRtl m_bus;
 	sc_clock& m_clock;
+	
 	int neg = 0;
 
-	int read_time = -1;
-	int write_time = -1;
-	uint64_t rw_address;
-	uint8_t *rw_data;
-	unsigned rw_num_bytes;
+	sc_signal<bool> irq;
+	
+	sc_in<uint32_t> res_ugly;
 
-	uint32_t read_value = 0;
-	uint32_t read_result = 0;
+	bool result_ready = false;
+	
+	uint32_t a=0;
+	uint32_t b=0;
+	uint32_t res=0;
+
+	SC_HAS_PROCESS(babyrunner);
+	babyrunner(sc_clock& clock) : sc_module("baby runner"), m_clock(clock), m_bus(clock), m_dut(), res_ugly("res without sc out") {
+		m_dut.clk(clock);
+
+		irq = false;
+		m_dut.io_irq(irq);
+
+		m_dut.io_sel(m_bus.sel);
+		m_dut.io_sb_SBaddress(m_bus.SBaddress);
+		m_dut.io_sb_SBvalid(m_bus.SBvalid);
+		m_dut.io_sb_SBwdata(m_bus.SBwdata);
+		m_dut.io_sb_SBwrite(m_bus.SBwrite);
+		m_dut.io_sb_SBsize(m_bus.SBsize);
+		m_dut.io_sb_SBready(m_bus.SBready);
+		m_dut.io_sb_SBrdata(m_bus.SBrdata);
+		
+		res_ugly(m_dut.res_ugly);
+		
+		SC_METHOD(resultUpdate);
+		sensitive << res_ugly;
+		dont_initialize();
+
+		/*SC_METHOD(resultReady);
+		sensitive << irq.posedge_event();
+		dont_initialize();*/
+		
+		SC_METHOD(run);
+		sensitive << m_clock.negedge_event();
+		dont_initialize();
+	}
+
+private:
+
+	void run() {
+		neg++;
+		if(neg == 1) { // write a
+			//a = klee_int("testrunner a");
+			m_bus.w1(0x00, a);
+		} else if(neg == 2) { // write a pt 2
+			m_bus.w2();
+		} else if(neg == 3) { // write b
+			//b = klee_int("testrunner b");
+			m_bus.w1(0x04, b);
+		} else if(neg == 4) { // write b pt 2
+			m_bus.w2();
+		} else if(neg == 5) { // write valid
+			m_bus.w1(0x10, 1);
+		} else if(neg == 6) { // write valid pt 2
+			m_bus.w2();
+		} else if(neg == 7) { // read res
+			m_bus.r1(0x08);
+		} else if(neg == 8) { // read res pt 2
+			m_bus.r2();
+			//res = m_bus.SBrdata.read();
+			//assert(m_bus.r2()==task_hash_f(a,b));
+		}
+	}
+	
+	void resultUpdate() {
+		res = res_ugly.read();
+		assert(res == task_hash_f(a,b));
+	}
+	
+	/*void resultReady() {
+		result_ready = true;
+		a = m_dut.a;
+		b = m_dut.b;
+		res = m_dut.res;
+	}*/
+};
+
+void babytest(babyrunner& tr) {
+
+	/*uint32_t a = 0;
+	uint32_t b = 0;
+//	uint32_t a = klee_int("a");
+//	uint32_t b = klee_int("b");
+
+	tr.call_write(addrA, a);
+	for(int i=0;i<4;i++) { // process write
+		minikernel_step();
+	}
+	tr.call_write(addrB, b);
+	for(int i=0;i<4;i++) { // process write
+		minikernel_step();
+	}
+	uint32_t valid = 1;
+	tr.call_write(addrValid, valid);
+	for(int i=0;i<4;i++) { // process write
+		minikernel_step();
+	}
+
+	assert(tr.result_ready);
+	tr.call_read(addrRes);
+	for(int i=0;i<4;i++) { // process read
+		minikernel_step();
+	}
+
+	assert(tr.res == task_hash_f(tr.a,tr.b));*/
+	for(int i=0;i<12;i++) {
+		minikernel_step();
+	}
+	// assert ready
+	for(int i=0;i<4;i++) {
+		minikernel_step();
+	}
+	
+}
+
+/*
+struct hash_test_runner : public sc_module {
+	VSBTaskHash m_dut;
+	SimpleBusRtl m_bus;
+	sc_clock& m_clock;
+	
+	int neg=0;
+	
+	uint32_t a=0;
+	uint32_t b=0;
+
+	sc_signal<bool> idle_reset;
+	sc_signal<bool> irq;
 
 	bool result_ready = false;
 
-	test_runner(sc_clock& clock, HashRtlWrapper& dut) : sc_module("test_runner"), m_dut(dut),m_clock(clock) {
-		SC_HAS_PROCESS(test_runner);
+	SC_HAS_PROCESS(hash_test_runner);
+	explicit hash_test_runner(sc_clock& clock) : sc_module("test runner"), m_clock(clock), m_bus(clock), m_dut{"rtl hash"} {
+		m_dut.clk(clock);
+
+		irq = false;
+		m_dut.io_irq(irq);
+		m_dut.reset(idle_reset);
+
+		m_dut.io_sel(m_bus.sel);
+		m_dut.io_sb_SBaddress(m_bus.SBaddress);
+		m_dut.io_sb_SBvalid(m_bus.SBvalid);
+		m_dut.io_sb_SBwdata(m_bus.SBwdata);
+		m_dut.io_sb_SBwrite(m_bus.SBwrite);
+		m_dut.io_sb_SBsize(m_bus.SBsize);
+		m_dut.io_sb_SBready(m_bus.SBready);
+		m_dut.io_sb_SBrdata(m_bus.SBrdata);
+		
 		SC_METHOD(run);
 		sensitive << m_clock.negedge_event();
 		dont_initialize();
 
 		SC_METHOD(resultReady);
-		sensitive << m_dut.irq.posedge_event();
+		sensitive << irq.posedge_event();
 		dont_initialize();
 	}
 
-	void call_read_easy(uint64_t address) {
-		call_read(address, reinterpret_cast<uint8_t *>(&read_value), sizeof(uint32_t));
+private:
+	void run() {
+		neg++;
+		if(neg == 1) { // write a
+			a = klee_int("testrunner a");
+			m_bus.w1(0x00, a);
+		} else if(neg == 2) { // write a pt 2
+			m_bus.w2();
+		} else if(neg == 3) { // write b
+			b = klee_int("testrunner b");
+			m_bus.w1(0x04, b);
+		} else if(neg == 4) { // write b pt 2
+			m_bus.w2();
+		} else if(neg == 5) { // write valid
+			m_bus.w1(0x10, 1);
+		} else if(neg == 6) { // write valid pt 2
+			m_bus.w2();
+		} /*else if(neg == 7) { // read res
+			m_bus.r1(0x08);
+		} else if(neg == 8) { // read res pt 2
+			m_bus.r2();
+			//res = m_bus.SBrdata.read();
+			//assert(m_bus.r2()==task_hash_f(a,b));
+		}
 	}
-
-	void call_read(uint64_t address, uint8_t *data, unsigned num_bytes) {
-		if(read_time == -1 && write_time == -1) {
-			read_time = neg+1;
-			rw_address = address;
-			rw_data = data;
-			rw_num_bytes = num_bytes;
-		}
-		else {
-			INFO(std::cout << "[run][WARNING] already reading or writing, fix call order" << std::endl);
-		}
+	
+	void resultReady() {
+		result_ready = true;
 	}
+};*/
 
-	void call_write(uint64_t address, uint8_t *data, unsigned num_bytes) {
-		if(read_time == -1 && write_time == -1) {
-			write_time = neg + 1;
-			rw_address = address;
-			rw_data = data;
-			rw_num_bytes = num_bytes;
-		}
-		else {
-			INFO(std::cout << "[run][WARNING] already reading or writing, fix call order" << std::endl);
-		}
+struct hash_test_runner : public test_runner {
+	VSBTaskHash m_dut;
+
+	sc_signal<bool> idle_reset;
+	sc_signal<bool> irq;
+
+	bool result_ready = false;
+	uint32_t result=0;
+
+	SC_HAS_PROCESS(hash_test_runner);
+	explicit hash_test_runner(sc_clock& clock) : test_runner(clock), m_dut{"rtl hash"} {
+		m_dut.clk(clock);
+
+		irq = false;
+		m_dut.io_irq(irq);
+		m_dut.reset(idle_reset);
+
+		m_dut.io_sel(m_bus.sel);
+		m_dut.io_sb_SBaddress(m_bus.SBaddress);
+		m_dut.io_sb_SBvalid(m_bus.SBvalid);
+		m_dut.io_sb_SBwdata(m_bus.SBwdata);
+		m_dut.io_sb_SBwrite(m_bus.SBwrite);
+		m_dut.io_sb_SBsize(m_bus.SBsize);
+		m_dut.io_sb_SBready(m_bus.SBready);
+		m_dut.io_sb_SBrdata(m_bus.SBrdata);
+
+		SC_METHOD(resultReady);
+		sensitive << irq.posedge_event();
+		dont_initialize();
 	}
 
 private:
-	void read() {
-		tlm::tlm_generic_payload trans;
-		trans.set_command(tlm::TLM_READ_COMMAND);
-		trans.set_address(rw_address);
-		trans.set_data_ptr(rw_data);
-		trans.set_data_length(rw_num_bytes);
-
-		auto delay = sc_core::sc_time(0, sc_core::SC_NS);
-		m_dut.transport(trans, delay);
-	}
-
-	void write() {
-		tlm::tlm_generic_payload trans;
-		trans.set_command(tlm::TLM_WRITE_COMMAND);
-		trans.set_address(rw_address);
-		trans.set_data_ptr(rw_data);
-		trans.set_data_length(rw_num_bytes);
-
-		auto delay = sc_core::sc_time(0, sc_core::SC_NS);
-		m_dut.transport(trans, delay);
-	}
-
 	void resultReady() {
 		result_ready = true;
-		call_read_easy(addrRes);
-	}
-
-	void run() {
-		neg++;
-
-		if(neg == read_time) { // call read on negedge
-			read();
-		}
-		else if(neg == read_time+1) { // read from read_address: part 2
-			read_result = m_dut.r2(rw_address);
-			read_time = -1;
-		}
-		else if(neg == write_time) {
-			write();
-		}
-		else if(neg == write_time+1) {
-			m_dut.w2();
-			write_time = -1;
-		}
+		result = m_dut.rootp->SBTaskHash__DOT__regHashBuf;
 	}
 };
 
+void functional_rtl_basic(hash_test_runner &tr) {
+/*
+	for(int i=0;i<12;i++) {
+		minikernel_step();
+	}
+	// done writing
+	for(int i=0;i<52;i++) {
+		minikernel_step();
+	}
+	assert(tr.result_ready);
+	//std::cout << "survived" << std::endl;
+*/
+//	uint32_t a = 6;
+//	uint32_t b = 24;
+	uint32_t a = klee_int("a");
+	uint32_t b = klee_int("b");
+
+	tr.call_write(addrA, a);
+	for(int i=0;i<4;i++) { // process write
+		minikernel_step();
+	}
+	tr.call_write(addrB, b);
+	for(int i=0;i<4;i++) { // process write
+		minikernel_step();
+	}
+	uint32_t valid = 1;
+	tr.call_write(addrValid, valid);
+	for(int i=0;i<4;i++) { // process write
+		minikernel_step();
+	}
+
+	for(unsigned i=0;i<52;i++){
+		minikernel_step();
+	}
+	assert(tr.result_ready);
+	assert(tr.result == task_hash_f(a,b));
+	//std::cout << "normal result: " << task_hash_f(a,b) << std::endl;
+	
+	
+	/*for(int i=0;i<4;i++) { // process read
+		minikernel_step();
+	}
+
+	assert(tr.rw_value == task_hash_f(a,b));*/
+}
+
 void functional_tlm_basic(hash_tlm &dut_tlm) {
-	uint32_t a = 1000;
-	uint32_t b = 3124;
-//	uint32_t a = klee_int("a");
-//	uint32_t b = klee_int("b");
+//	uint32_t a = 1000;
+//	uint32_t b = 3124;
+	uint32_t a = klee_int("a");
+	uint32_t b = klee_int("b");
 
 	// TLM
 	dut_tlm.a = a;
@@ -147,41 +392,11 @@ void functional_tlm_basic(hash_tlm &dut_tlm) {
 	assert(!dut_tlm.ready);
 }
 
-void functional_rtl_basic(HashRtlWrapper &dut_rtl, test_runner &tr) {
-	uint32_t a = 1000;
-	uint32_t b = 3124;
-//	uint32_t a = klee_int("a");
-//	uint32_t b = klee_int("b");
-
-	tr.call_write(addrA, reinterpret_cast<uint8_t *>(&a), sizeof(uint32_t));
-	for(int i=0;i<4;i++) { // process write
-		minikernel_step();
-	}
-	tr.call_write(addrB, reinterpret_cast<uint8_t *>(&b), sizeof(uint32_t));
-	for(int i=0;i<4;i++) { // process write
-		minikernel_step();
-	}
-	uint32_t valid = 1;
-	tr.call_write(addrValid, reinterpret_cast<uint8_t *>(&valid), sizeof(uint32_t));
-	for(int i=0;i<4;i++) { // process write
-		minikernel_step();
-	}
-
-	while(!tr.result_ready) {
-		minikernel_step();
-	}
-	for(int i=0;i<4;i++) { // process read
-		minikernel_step();
-	}
-
-	assert(tr.read_result == task_hash_f(a,b));
-}
-
-void comparison_basic(hash_tlm &dut_tlm, HashRtlWrapper &dut_rtl, test_runner &tr) {
-	uint32_t a = 6;
-	uint32_t b = 12;
-//	uint32_t a = klee_int("a");
-//	uint32_t b = klee_int("b");
+void comparison_basic(hash_tlm &dut_tlm, hash_test_runner &tr) {
+//	uint32_t a = 6;
+//	uint32_t b = 12;
+	uint32_t a = klee_int("a");
+	uint32_t b = klee_int("b");
 
 	// TLM
 	dut_tlm.a = a;
@@ -200,35 +415,31 @@ void comparison_basic(hash_tlm &dut_tlm, HashRtlWrapper &dut_rtl, test_runner &t
 
 	uint32_t tlm_res = dut_tlm.hash;
 
-	uint32_t res;
-	pl.set_read();
-	pl.set_address(addrRes);
-	pl.set_data_length(sizeof(uint32_t));
-	pl.set_data_ptr(reinterpret_cast<uint8_t *>(&res));
-	dut_tlm.transport(pl, delay);
-
 	// RTL
-	tr.call_write(addrA, reinterpret_cast<uint8_t *>(&a), sizeof(uint32_t));
+	tr.call_write(addrA, a);
 	for(int i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
-	tr.call_write(addrB, reinterpret_cast<uint8_t *>(&b), sizeof(uint32_t));
+	tr.call_write(addrB, b);
 	for(int i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
-	tr.call_write(addrValid, reinterpret_cast<uint8_t *>(&valid), sizeof(uint32_t));
+	tr.call_write(addrValid, valid);
 	for(int i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
 
-	while(!tr.result_ready) {
+	for(int i=0;i<52;i++) {
 		minikernel_step();
 	}
+	assert(tr.result == tlm_res);
+
+	/*tr.call_read(addrRes);
 	for(int i=0;i<4;i++) { // process read
 		minikernel_step();
 	}
 
-	assert(tlm_res == tr.read_result);
+	assert(tlm_res == tr.rw_value);*/
 }
 
 int main(int argc, char* argv[])
@@ -236,8 +447,9 @@ int main(int argc, char* argv[])
 	hash_tlm dut_tlm("hash TLM");
 
 	sc_clock clk{"hash clk", sc_core::sc_time(20, sc_core::SC_NS)};
-	HashRtlWrapper dut_rtl("hash rtl", clk);
-	test_runner tr = test_runner(clk, dut_rtl);
+	hash_test_runner tr(clk);
+
+	//babyrunner br(clk);
 
 	Simcontext::get().initialize();
 	minikernel_step(); //0ns
@@ -246,9 +458,10 @@ int main(int argc, char* argv[])
 		if(strcmp(argv[1], "functional_tlm_basic") == 0) {
 			functional_tlm_basic(dut_tlm);
 		} else if(strcmp(argv[1], "functional_rtl_basic") == 0) {
-			functional_rtl_basic(dut_rtl,tr);
+			functional_rtl_basic(tr);
+			// babytest(br);
 		} else if(strcmp(argv[1], "comparison_basic") == 0) {
-			comparison_basic(dut_tlm,dut_rtl,tr);
+			comparison_basic(dut_tlm,tr);
 		}
 		else
 			INFO(std::cout << "Invalid test given." << std::endl);
