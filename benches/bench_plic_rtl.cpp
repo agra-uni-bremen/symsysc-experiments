@@ -17,14 +17,6 @@ static constexpr uint32_t kPlicClaimReg = 0x200004;
 static constexpr uint32_t kPlicEnableReg = 0x2000;
 static constexpr uint32_t kPlicThresholdReg = 0x200000;
 
-/*
- *TODO symbolic ID problem:
- * priority cannot be written due to RegisterRange vector size (fork failed)
- * same with interface_tests
- *
- * - Test case without setting enabled?
- */
-
 struct plic_test_runner : public test_runner {
 	VRVPLIC m_dut;
 
@@ -90,7 +82,7 @@ private:
 		}
 	}
 
-	void run() {
+	void run() override {
 		test_runner::run();
 
 		if(neg == interrupt_time) {
@@ -105,54 +97,44 @@ private:
 	}
 };
 
+uint32_t calculate_enable(uint32_t id) {
+	if(id <= 0 || id >= PLIC_RTL_NUM_IRQS) {
+		return 0;
+	}
+	uint32_t shift = id<32?0:32;
+	return 1UL << (id-shift);
+}
 
 void functional_test_basic(plic_test_runner &runner) {
-	std::cout << "begin test" << std::endl;
-	// TODO: symbolic ID continue testing, also remove assumes to see what happens
 	// test valid interrupt number
-	uint32_t id = 30;
-//	uint32_t id = klee_int("interrupt number");
-//	klee_assume(id > 0);
-//	klee_assume(id < PLIC_RTL_NUM_IRQS);
+	uint32_t id = klee_int("interrupt number");
+	klee_assume(id > 0);
+	klee_assume(id < PLIC_RTL_NUM_IRQS);
 
 	minikernel_step(); // 0ns
 
-	std::cout << "before writing threshold" << std::endl;
 	uint32_t prio_threshold = 7;
 	runner.call_write(kPlicThresholdReg, prio_threshold);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 10ns - 40ns
 	}
-	std::cout << "after writing threshold" << std::endl;
 
-	uint32_t enable = 0;
-	uint32_t enable_address = kPlicEnableReg;
-	if(id > 0 && id < 32) { // enable lower
-		enable = 1UL << id;
-	} else if(id >= 32 && id < PLIC_RTL_NUM_IRQS) { // enable upper
-		enable = 1UL << (id-32);
-		enable_address += sizeof(uint32_t);
-	}
-	std::cout << "before writing enable" << std::endl;
+	uint32_t enable = calculate_enable(id);
+	uint32_t en_addr_offset = id<32?0:sizeof(uint32_t);
+	uint32_t enable_address = kPlicEnableReg+en_addr_offset;
 	runner.call_write(enable_address, enable);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 50ns - 80ns
 	}
-	std::cout << "after writing enable" << std::endl;
 
 	uint32_t prio = 1;
-	// TODO fork failed
-	std::cout << "before writing prio" << std::endl;
 	runner.call_write(sizeof(uint32_t)*id, prio);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 90ns - 120ns
 	}
-	std::cout << "after writing prio" << std::endl;
 
 	runner.trigger_interrupt(id);
-	std::cout << "after initial trigger" << std::endl;
 	minikernel_step(); // 130ns, trigger on negedge
-	std::cout << "after processing trigger" << std::endl;
 
 	//Is the pending interrupts register changed?
 	assert(runner.pendings[id].read());
@@ -168,19 +150,16 @@ void functional_test_basic(plic_test_runner &runner) {
 	auto after = Simcontext::get().getGlobalTime();
 	assert(after-before == sc_core::sc_time(30, sc_core::SC_NS));
 
-	std::cout << "after triggered, before processing response" << std::endl;
 	for(unsigned i=0;i<4;i++) {
 		assert(runner.was_triggered);
 		minikernel_step(); // 170ns - 200ns
 	}
 	assert(runner.rw_value == id);
 
-	std::cout << "before writing claim" << std::endl;
 	runner.call_write(kPlicClaimReg, id);
 	for(unsigned i=0;i<2;i++) {
 		minikernel_step(); // 210ns - 220ns
 	}
-	std::cout << "after writing claim" << std::endl;
 
 	// was interrupt cleared by claiming?
 	assert(runner.was_cleared && "Interrupt was not cleared after claim");
@@ -194,17 +173,21 @@ void functional_test_basic(plic_test_runner &runner) {
 	for(unsigned i=0;i<2;i++) {
 		minikernel_step(); // 230ns - 240ns, second part of write
 	}
-	std::cout << "done" << std::endl;
 }
 
 
 void functional_test_priority(plic_test_runner& runner) {
-	uint32_t id_a = 1;
-	uint32_t id_b = 2;
+	uint32_t id_a = klee_int("id a");
+	uint32_t id_b = klee_int("id b");
+	klee_assume(id_a != id_b);
+	klee_assume(id_a > 0);
+	klee_assume(id_a < PLIC_RTL_NUM_IRQS);
+	klee_assume(id_b > 0);
+	klee_assume(id_b < PLIC_RTL_NUM_IRQS);
 	uint32_t prio_a = klee_int("prio_a");
 	uint32_t prio_b = klee_int("prio_b");
-//	uint32_t prio_a = 3;
-//	uint32_t prio_b = 1;
+	klee_assume(prio_a > 0);
+	klee_assume(prio_b > 0);
 
 	minikernel_step(); // 0ns
 
@@ -214,10 +197,32 @@ void functional_test_priority(plic_test_runner& runner) {
 		minikernel_step(); // 10ns - 40ns
 	}
 
-	uint32_t enable_lower = 1UL << id_a | 1UL << id_b;
-	runner.call_write(kPlicEnableReg, enable_lower);
-	for(unsigned i=0;i<4;i++) {
-		minikernel_step(); // 50ns - 80ns
+	if(id_a<32 && id_b<32) {
+		uint32_t enable = calculate_enable(id_a) | calculate_enable(id_b);
+		runner.call_write(kPlicEnableReg, enable);
+		for(unsigned i=0;i<4;i++) {
+			minikernel_step(); // 50ns - 80ns
+		}
+	} else if(id_a>=32&&id_b>=32) {
+		uint32_t enable = calculate_enable(id_a) | calculate_enable(id_b);
+		runner.call_write(kPlicEnableReg+sizeof(uint32_t), enable);
+		for(unsigned i=0;i<4;i++) {
+			minikernel_step(); // 50ns - 80ns
+		}
+	} else {
+		uint32_t enable_a = calculate_enable(id_a);
+		uint32_t en_addr_offset_a = id_a<32?0:sizeof(uint32_t);
+		uint32_t enable_address_a = kPlicEnableReg+en_addr_offset_a;
+		runner.call_write(enable_address_a, enable_a);
+		for(unsigned i=0;i<4;i++) {
+			minikernel_step(); // 50ns - 80ns
+		}
+		uint32_t enable_b = calculate_enable(id_b);
+		uint32_t enable_address_b = kPlicEnableReg-(en_addr_offset_a-sizeof(uint32_t));
+		runner.call_write(enable_address_b, enable_b);
+		for(unsigned i=0;i<4;i++) {
+			minikernel_step(); // 50ns - 80ns
+		}
 	}
 
 	runner.call_write(sizeof(uint32_t)*id_a, prio_a);
@@ -256,8 +261,8 @@ void functional_test_priority(plic_test_runner& runner) {
 	uint32_t first_itr = (prio_a3) > (prio_b3) ? id_a : id_b;
 	uint32_t second_itr = (prio_a3) > (prio_b3) ? id_b : id_a;
 	if((prio_a3) == (prio_b3)) {
-		first_itr = id_a;
-		second_itr = id_b;
+		first_itr = id_a > id_b ? id_b : id_a;
+		second_itr = id_a > id_b ? id_a : id_b;
 	}
 	assert(runner.rw_value == first_itr);
 	runner.call_write(kPlicClaimReg, first_itr);
@@ -280,9 +285,9 @@ void functional_test_priority(plic_test_runner& runner) {
 }
 
 void functional_test_threshold(plic_test_runner &runner) {
-	uint32_t id = 1;
-//	uint32_t prio = 2;
-//	uint32_t threshold = 7;
+	uint32_t id = klee_int("id");
+	klee_assume(id > 0);
+	klee_assume(id < PLIC_RTL_NUM_IRQS);
 	uint32_t prio = klee_int("priority");
 	uint32_t threshold = klee_int("priority threshold");
 
@@ -293,8 +298,10 @@ void functional_test_threshold(plic_test_runner &runner) {
 		minikernel_step(); // 10ns - 40ns
 	}
 
-	uint32_t enable_lower = 1UL << id;
-	runner.call_write(kPlicEnableReg, enable_lower);
+	uint32_t enable = calculate_enable(id);
+	uint32_t en_addr_offset = id<32?0:sizeof(uint32_t);
+	uint32_t enable_address = kPlicEnableReg+en_addr_offset;
+	runner.call_write(enable_address, enable);
 	for(unsigned i=0;i<4;i++) {
 		minikernel_step(); // 50ns - 80ns
 	}
@@ -314,148 +321,10 @@ void functional_test_threshold(plic_test_runner &runner) {
 	assert(!runner.was_triggered);
 	minikernel_step(); // 160ns, triggered
 
-	if((prio&0b111) > (threshold&0b111) || (prio&0b111) == 0) {
-		assert(!runner.was_triggered); // fails, but known bug
+	if(((prio&0b111) > 0) && ((prio&0b111) > (threshold&0b111))) {
+		assert(runner.was_triggered); // fails, but known bug
 	} else {
-		assert(runner.was_triggered);
-	}
-}
-
-/*
-void invalid_test_id(PlicRtlWrapper& dut, test_runner& runner) {
-	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
-
-	// test invalid interrupt number
-//	uint32_t id = numberInterrupts;
-	uint32_t id = klee_int("interrupt number");
-	klee_assume(id < 0 | id >= numberInterrupts);
-
-	minikernel_step(); // 0ns
-
-	runner.trigger_interrupt(id);
-	minikernel_step();
-
-	for(unsigned i=0;i<2;i++) {
-		minikernel_step(); // 20ns - 30ns
-	}
-
-	assert(!sit.was_triggered);
-	minikernel_step(); // 40
-	assert(!sit.was_triggered);
-}
-
-// -- Ab hier auskommentiert
-void invalid_test_priority(PlicRtlWrapper& dut, test_runner& runner) {
-	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
-
-	uint32_t id = 51;
-//	uint32_t prio = 0;
-	uint32_t prio = klee_int("interrupt priority");
-	klee_assume(prio <= 0);
-
-	minikernel_step(); // 0ns
-
-	uint32_t prio_threshold = 7;
-	runner.call_write(kPlicThresholdReg, reinterpret_cast<uint8_t *>(&prio_threshold), sizeof(uint32_t));
-	for(unsigned i=0;i<4;i++) {
-		minikernel_step(); // 10ns - 40ns
-	}
-
-	uint32_t enable = 0;
-	uint32_t enable_address = kPlicEnableReg;
-	if(id > 0 && id < 32) { // enable lower
-		enable = 1UL << id;
-	} else if(id >= 32 && id <= 51) { // enable upper
-		enable = 1UL << (id-32);
-		enable_address += sizeof(uint32_t);
-	}
-	runner.call_write(enable_address, reinterpret_cast<uint8_t *>(&enable), sizeof(uint32_t));
-	for(unsigned i=0;i<4;i++) {
-		minikernel_step(); // 50ns - 80ns
-	}
-
-	runner.call_write(sizeof(uint32_t)*id, reinterpret_cast<uint8_t *>(&prio), sizeof(uint32_t));
-	for(unsigned i=0;i<4;i++) {
-		minikernel_step(); // 90ns - 120ns
-	}
-
-	minikernel_step(); // 130ns, trigger on negedge
-	dut.gateway_trigger_interrupt(id);
-
-	//Is the pending interrupts register changed?
-	assert(dut.pendings_[id].read());
-	minikernel_step(); // 130ns pt2, start processing of triggered interrupts
-
-	for(unsigned i=0;i<2;i++) {
-		minikernel_step(); // 140ns - 150ns
-	}
-
-	assert(!sit.was_triggered);
-	minikernel_step(); // 160
-	assert(!sit.was_triggered);
-}
-
-void invalid_test_threshold(PlicRtlWrapper &dut, test_runner &runner) {
-	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.hart);
-
-	uint32_t id = 1;
-	uint32_t prio = 6;
-	uint32_t threshold = 8;
-//	uint32_t prio = klee_int("priority");
-//	klee_assume(prio > 0);
-//	uint32_t threshold = klee_int("priority threshold");
-//	klee_assume(threshold > 7);
-
-	minikernel_step(); // 0ns
-
-	runner.call_write(kPlicThresholdReg, reinterpret_cast<uint8_t *>(&threshold), sizeof(uint32_t));
-	for(unsigned i=0;i<4;i++) {
-		minikernel_step(); // 10ns - 40ns
-	}
-
-	uint32_t enable_lower = 1UL << id;
-	runner.call_write(kPlicEnableReg, reinterpret_cast<uint8_t *>(&enable_lower), sizeof(uint32_t));
-	for(unsigned i=0;i<4;i++) {
-		minikernel_step(); // 50ns - 80ns
-	}
-
-	runner.call_write(sizeof(uint32_t)*id, reinterpret_cast<uint8_t *>(&prio), sizeof(uint32_t));
-	for(unsigned i=0;i<4;i++) {
-		minikernel_step(); // 90ns - 120ns
-	}
-
-	minikernel_step(); // 130ns, trigger on negedge
-	dut.gateway_trigger_interrupt(id);
-	minikernel_step(); // 130ns pt2, start processing of triggered interrupts
-
-	for(unsigned i=0;i<2;i++) {
-		minikernel_step(); // 140ns - 150ns
-	}
-
-	assert(!sit.was_triggered);
-	minikernel_step(); // 160ns, triggered
-	assert(!sit.was_triggered);
-}
-// -- Bis hier auskommentiert
-*/
-
-/*
- *TODO: kompletten SimpleBus testen, dann wahrscheinlich eher eine Interface-Methode
- */
-void interface_test_read(plic_test_runner &runner) {
-//	runner.call_read(klee_int("address"));
-	runner.call_read(10);
-
-	for(int i=0;i<4;i++) {
-		minikernel_step();
-	}
-}
-void interface_test_write(plic_test_runner &runner) {
-//	runner.call_write(klee_int("address"), klee_int("value"));
-	runner.call_write(10, 23);
-
-	for(int i=0;i<4;i++) {
-		minikernel_step();
+		assert(!runner.was_triggered);
 	}
 }
 
@@ -473,16 +342,6 @@ int main(int argc, char* argv[])
 			functional_test_priority(tr);
 		} else if(strcmp(argv[1], "functional_test_threshold") == 0) {
 			functional_test_threshold(tr);
-//		} else if(strcmp(argv[1], "invalid_test_priority") == 0) {
-//			invalid_test_priority(plic, tr);
-//		} else if(strcmp(argv[1], "invalid_test_id") == 0) {
-//			invalid_test_id(plic, tr);
-//		} else if(strcmp(argv[1], "invalid_test_threshold") == 0) {
-//			invalid_test_threshold(plic, tr);
-		} else if(strcmp(argv[1], "interface_test_read") == 0) {
-			interface_test_read(tr);
-		} else if(strcmp(argv[1], "interface_test_write") == 0) {
-			interface_test_write(tr);
 		}
 		else
 			INFO(std::cout << "Invalid test given." << std::endl);

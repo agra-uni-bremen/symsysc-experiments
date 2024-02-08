@@ -6,33 +6,22 @@ NORM='\033[0m'
 buildfolder="build"
 sourcefolder=$(realpath .)
 tests=(
-#    "sensor#1"
-#    "sensor#2"
-#    "uart"
-#    "plic#functional_test_basic"
-#    "plic#functional_test_consider_threshold"
-#    "plic#functional_test_priority_direct"
-#    "plic#interface_test_read"
-#    "plic#interface_test_write"
-#    "plic_fault#functional_test_basic"
-#    "plic_fault#functional_test_consider_threshold"
-#    "plic_fault#functional_test_priority_direct"
-#    "plic_fault#interface_test_read"
-#    "plic_fault#interface_test_write"
-#    "sysc_plic#functional_test_basic"
-#    "sysc_plic#functional_test_consider_threshold"
-#    "sysc_plic#functional_test_priority_direct"
-#    "sysc_plic#interface_test_read"
-#    "sysc_plic#interface_test_write"
-#  "rtl#functional_test_basic"
-#  "rtl#functional_test_priority"
-#  "rtl#functional_test_threshold"
-#  "rtl#invalid_test_id"
-#  "rtl#interface_test_read"
-#  "rtl#interface_test_write"
-#    "comp#functional_test_priority"
-    "gcd#comparison_basic"
-#    "map#functional_rtl_basic"
+    "plic#functional_test_basic"
+    "plic#functional_test_consider_threshold"
+     "plic#functional_test_priority_direct"
+    "plic#interface_test_read"
+    "plic#interface_test_write"
+  "rtl#functional_test_basic"
+  "rtl#functional_test_priority"
+  "rtl#functional_test_threshold"
+    "comp#functional_test_priority"
+	"comp#functional_test_threshold"
+  "map#functional_rtl_basic"
+  "map#comparison_basic"
+  "hash#functional_rtl_basic"
+  "hash#comparison_basic"
+	"gcd#functional_rtl_basic"
+  "gcd#comparison_basic"
     )
 today=$(date +"%Y-%m-%d-%H.%M")
 testfolder_base=test/$today
@@ -43,6 +32,15 @@ klee_args=(
     "-only-output-states-covering-new"
     #"-max-memory=40000"	#default: 2000 -> 2GB
     #"--emit-all-errors=1"
+    #"--use-query-log=solver:kquery"
+#    "--log-partial-queries-early=true"
+    "--optimize"
+    #"--max-memory=1000"
+    "--max-time=24h"
+    "--max-sym-array-size=4096"
+    "--max-solver-time=120s"
+    "--watchdog"
+    "--search=bfs"
     )
 
 echo "Today is $today, writing to $testfolder_base"
@@ -65,9 +63,10 @@ do
         args="${klee_args[*]} $buildfolder/testbench_${base_name}"
 	echo "klee --output-dir=${klee_target_folder[${i}]}/klee-run ${args} $subtype > $testfolder/run.log"
 	{ time klee --output-dir=${klee_target_folder[${i}]}/klee-run ${args} $subtype ; } > "$testfolder/run.log" 2>&1 &
-	klee_pid[${i}]=$!
+	 klee_pid[${i}]=$!
 	sleep 1
-	echo "$base_name ($subtype) running as ${klee_pid[${i}]} into ${klee_folder[${i}]}"
+	 echo "$base_name ($subtype) running as ${klee_pid[${i}]} into ${klee_folder[${i}]}"
+#	echo -e "${GRN}${tests[${i}]} finished.$NORM"
 	i=$[i + 1]
 done
 

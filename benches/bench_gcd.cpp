@@ -58,8 +58,6 @@ private:
 };
 
 void functional_tlm_basic(gcd_tlm &dut_tlm) {
-//	uint32_t a = 2147487755;//3087007744;
-//	uint32_t b = 2147483648;//1543503872;
 	uint32_t a = klee_int("a");
 	uint32_t b = klee_int("b");
 
@@ -92,8 +90,6 @@ void functional_tlm_basic(gcd_tlm &dut_tlm) {
 }
 
 void functional_rtl_basic(gcd_test_runner &tr) {
-//	uint32_t a = 0;
-//	uint32_t b = 1;
 	uint32_t a = klee_int("a");
 	uint32_t b = klee_int("b");
 
@@ -119,7 +115,7 @@ void functional_rtl_basic(gcd_test_runner &tr) {
 	assert(tr.result_ready && "calculations apparently do not terminate");
 	assert(tr.result == gcd_euclid(a,b));
 
-/*	tr.call_read(addrRes);
+	/*tr.call_read(addrRes);
 	for(int i=0;i<4;i++) { // process read
 		minikernel_step();
 	}
@@ -128,11 +124,9 @@ void functional_rtl_basic(gcd_test_runner &tr) {
 }
 
 void comparison_basic(gcd_tlm &dut_tlm, gcd_test_runner &tr) {
-//	uint32_t a = 6;
-//	uint32_t b = 12;
 	uint32_t a = klee_int("a");
 	uint32_t b = klee_int("b");
-
+	
 	// TLM
 	dut_tlm.a = a;
 	dut_tlm.b = b;
@@ -151,6 +145,7 @@ void comparison_basic(gcd_tlm &dut_tlm, gcd_test_runner &tr) {
 	uint32_t tlm_res = dut_tlm.res;
 
 	// RTL
+	minikernel_step(); // posedge, so that writing can start immediately
 	tr.call_write(addrA, a);
 	for(int i=0;i<4;i++) { // process write
 		minikernel_step();
@@ -209,12 +204,7 @@ int main(int argc, char* argv[])
 		sc_core::Simcontext::get().printInfo();
 	}
 
-
 	INFO(std::cout << "finished at " << minikernel_current_time() << std::endl);
-	/*
-	 *TODO:
-	 * - Mehr Testfälle?
-	 */
 	return 0;
 }
 

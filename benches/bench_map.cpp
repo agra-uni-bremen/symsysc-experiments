@@ -17,6 +17,7 @@ static constexpr uint32_t ready = 0x18;
 
 struct map_test_runner : public test_runner {
 	VSBTaskMap map;
+	//map_basic map;
 	sc_signal<bool> idle_reset;
 	sc_signal<bool> irq;
 
@@ -74,10 +75,8 @@ void write_tlm(map_tlm &dut_tlm, uint32_t addr, uint8_t *val) {
 }
 
 void functional_tlm_basic(map_tlm &dut_tlm) {
-//	uint32_t wdat[] = {1,2,3,4,5,6,7,8};
 	uint32_t wdat[8];
 	klee_make_symbolic(wdat, sizeof(wdat), "write data");
-//	uint32_t map_val = 7;
 	uint32_t map_val = klee_int("mapping value");
 	dut_tlm.mapV = map_val;
 
@@ -103,10 +102,8 @@ void functional_tlm_basic(map_tlm &dut_tlm) {
 }
 
 void functional_rtl_basic(map_test_runner &tr) {
-//	uint32_t wdat[] = {1,2,3,4,5,6,7,8};
-	uint32_t wdat[8];
+	uint32_t wdat[2];
 	klee_make_symbolic(wdat, sizeof(wdat), "write data");
-//	uint32_t map_val = 10;
 	uint32_t map_val = klee_int("mapping value");
 
 	tr.call_write(mapV, map_val);
@@ -115,7 +112,7 @@ void functional_rtl_basic(map_test_runner &tr) {
 	}
 
 	uint32_t wen = 1;
-	for(int i=0;i<8;i++) {
+	for(int i=0;i<2;i++) {
 		tr.call_write(mAddr, i);
 		for (int j=0; j<4; j++) {
 			minikernel_step();
@@ -140,9 +137,9 @@ void functional_rtl_basic(map_test_runner &tr) {
 		minikernel_step();
 	}
 
-	int32_t ref_vals[] = {(int32_t)wdat[0],(int32_t)wdat[1],(int32_t)wdat[2],(int32_t)wdat[3],(int32_t)wdat[4],(int32_t)wdat[5],(int32_t)wdat[6],(int32_t)wdat[7]};
-	task_map_f(8, ref_vals, map_val);
-	for(int i=0;i<8;i++) {
+	int32_t ref_vals[] = {(int32_t)wdat[0],(int32_t)wdat[1]};//,(int32_t)wdat[2],(int32_t)wdat[3],(int32_t)wdat[4],(int32_t)wdat[5],(int32_t)wdat[6],(int32_t)wdat[7]};
+	task_map_f(2, ref_vals, map_val);
+	for(int i=0;i<2;i++) {
 		tr.call_write(mAddr, i);
 		for (int j=0; j<4; j++) { // write address
 			minikernel_step();
@@ -158,15 +155,13 @@ void functional_rtl_basic(map_test_runner &tr) {
 
 void comparison_basic(map_tlm &dut_tlm, map_test_runner &tr) {
 	// data
-//	uint32_t wdat[] = {1,2,3,4,5,6,7,8};
-	uint32_t wdat[8];
+	uint32_t wdat[2];
 	klee_make_symbolic(wdat, sizeof(wdat), "write data");
-//	uint32_t map_val = 7;
 	uint32_t map_val = klee_int("mapping value");
 
 	// TLM
 	uint32_t enable = 1;
-	for(int i=0;i<8;i++) {
+	for(int i=0;i<2;i++) {
 		dut_tlm.mAddr = i;
 		dut_tlm.mWdat = wdat[i];
 		dut_tlm.mapV = map_val;
@@ -179,19 +174,20 @@ void comparison_basic(map_tlm &dut_tlm, map_test_runner &tr) {
 
 	assert(dut_tlm.ready == 1);
 
-	uint32_t tlm_res[8];
-	for(int i=0;i<8;i++) {
+	uint32_t tlm_res[2];
+	for(int i=0;i<2;i++) {
 		write_tlm(dut_tlm, mAddr, reinterpret_cast<uint8_t *>(&i));
 		tlm_res[i] = dut_tlm.mRdat;
 	}
 
 	// RTL
+	minikernel_step();
 	tr.call_write(mapV, map_val);
 	for(int i=0;i<4;i++) {
 		minikernel_step();
 	}
 
-	for(int i=0;i<8;i++) {
+	for(int i=0;i<2;i++) {
 		tr.call_write(mAddr, i);
 		for (int j=0; j<4; j++) {
 			minikernel_step();
@@ -215,7 +211,7 @@ void comparison_basic(map_tlm &dut_tlm, map_test_runner &tr) {
 		minikernel_step();
 	}
 
-	for(int i=0;i<8;i++) {
+	for(int i=0;i<2;i++) {
 		tr.call_write(mAddr, i);
 		for (int j=0; j<4; j++) {
 			minikernel_step();

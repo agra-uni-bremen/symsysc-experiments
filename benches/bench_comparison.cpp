@@ -24,12 +24,6 @@ static constexpr uint32_t kPlicEnableReg = 0x2000;
 static constexpr uint32_t kPlicThresholdReg = 0x200000;
 
 
-/*
- *TODO PLICs differ slightly in their behaviour
- * - prio <= threshold
- */
-
-
 struct plic_test_runner : public test_runner {
 	VRVPLIC m_dut;
 
@@ -96,7 +90,7 @@ private:
 		}
 	}
 
-	void run() {
+	void run() override {
 		test_runner::run();
 
 		if(neg == interrupt_time) {
@@ -170,7 +164,13 @@ struct target_tlm : public external_interrupt_target
 	}
 };
 
-// simple priority order test
+uint32_t calculate_enable(uint32_t id) {
+	if(id <= 0 || id >= PLIC_NUM_IRQS) {
+		return 0;
+	}
+	uint32_t shift = id<32?0:32;
+	return 1UL << (id-shift);
+}
 
 void functional_test_priority(PLIC<1, PLIC_NUM_IRQS, maxPriority>& plic_tlm,
 							  plic_test_runner& runner_rtl) {
@@ -183,14 +183,12 @@ void functional_test_priority(PLIC<1, PLIC_NUM_IRQS, maxPriority>& plic_tlm,
 	klee_assume(id_b < PLIC_NUM_IRQS);
 	klee_assume(id_a != id_b);
 
-//	uint32_t prio_a = 6;
-//	uint32_t prio_b = 13;
 	uint32_t prio_a = klee_int("prio_a");
 	uint32_t prio_b = klee_int("prio_b");
 	klee_assume(prio_a > 0);
 	klee_assume(prio_b > 0);
-	klee_assume(prio_a < maxPriority); //[1...31]	//zero is "disabled", checked in consider thr
-	klee_assume(prio_b < maxPriority);
+ //	klee_assume(prio_a < maxPriority);
+ //	klee_assume(prio_b < maxPriority);
 
 	// TLM PLIC
 
@@ -208,17 +206,39 @@ void functional_test_priority(PLIC<1, PLIC_NUM_IRQS, maxPriority>& plic_tlm,
 	uint32_t second_itr_tlm = plic_tlm.hart_get_next_pending_interrupt(0, false);
 
 	// RTL PLIC
-
+	minikernel_step(); // posedge, so writing can start immediately
 	uint32_t prio_threshold = 7;
 	runner_rtl.call_write(kPlicThresholdReg, prio_threshold);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
 
-	uint32_t enable_lower = 1UL << id_a | 1UL << id_b;
-	runner_rtl.call_write(kPlicEnableReg, enable_lower);
-	for(unsigned i=0;i<4;i++) { // process write
-		minikernel_step();
+	if(id_a<32 && id_b<32) {
+		uint32_t enable = calculate_enable(id_a) | calculate_enable(id_b);
+		runner_rtl.call_write(kPlicEnableReg, enable);
+		for(unsigned i=0;i<4;i++) {
+			minikernel_step(); // 50ns - 80ns
+		}
+	} else if(id_a>=32&&id_b>=32) {
+		uint32_t enable = calculate_enable(id_a) | calculate_enable(id_b);
+		runner_rtl.call_write(kPlicEnableReg+sizeof(uint32_t), enable);
+		for(unsigned i=0;i<4;i++) {
+			minikernel_step(); // 50ns - 80ns
+		}
+	} else {
+		uint32_t enable_a = calculate_enable(id_a);
+		uint32_t en_addr_offset_a = id_a<32?0:sizeof(uint32_t);
+		uint32_t enable_address_a = kPlicEnableReg+en_addr_offset_a;
+		runner_rtl.call_write(enable_address_a, enable_a);
+		for(unsigned i=0;i<4;i++) {
+			minikernel_step(); // 50ns - 80ns
+		}
+		uint32_t enable_b = calculate_enable(id_b);
+		uint32_t enable_address_b = kPlicEnableReg-(en_addr_offset_a-sizeof(uint32_t));
+		runner_rtl.call_write(enable_address_b, enable_b);
+		for(unsigned i=0;i<4;i++) {
+			minikernel_step(); // 50ns - 80ns
+		}
 	}
 
 	runner_rtl.call_write(sizeof(uint32_t)*id_a, prio_a);
@@ -248,15 +268,13 @@ void functional_test_priority(PLIC<1, PLIC_NUM_IRQS, maxPriority>& plic_tlm,
 
 void functional_test_threshold(PLIC<1, PLIC_NUM_IRQS, maxPriority>& plic_tlm, plic_test_runner& runner_rtl) {
 	// data
-	uint32_t id = 1;
-	uint32_t prio = 0;
-	uint32_t threshold = 0;
-	// klee_assume(id > 0);
-	// klee_assume(id < PLIC_NUM_IRQS);
-//	uint32_t prio = klee_int("prio interrupt");
-//	klee_assume(prio < maxPriority);
-//	uint32_t threshold = klee_int("priority threshold");
-//	klee_assume(threshold < maxPriority);
+	uint32_t id = klee_int("interrupt id");
+	 klee_assume(id > 0);
+	 klee_assume(id < PLIC_NUM_IRQS);
+	uint32_t prio = klee_int("prio interrupt");
+ //	klee_assume(prio < maxPriority);
+	uint32_t threshold = klee_int("priority threshold");
+ //	klee_assume(threshold < maxPriority);
 
 	// TLM PLIC
 	plic_tlm.interrupt_priorities[id] = prio;
@@ -273,8 +291,10 @@ void functional_test_threshold(PLIC<1, PLIC_NUM_IRQS, maxPriority>& plic_tlm, pl
 		minikernel_step();
 	}
 
-	uint32_t enable_lower = 1UL << id;
-	runner_rtl.call_write(kPlicEnableReg, enable_lower);
+	uint32_t enable = calculate_enable(id);
+	uint32_t en_addr_offset = id<32?0:sizeof(uint32_t);
+	uint32_t enable_address = kPlicEnableReg+en_addr_offset;
+	runner_rtl.call_write(enable_address, enable);
 	for(unsigned i=0;i<4;i++) { // process write
 		minikernel_step();
 	}
