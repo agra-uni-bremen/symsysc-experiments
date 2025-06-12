@@ -1,12 +1,16 @@
 #ifndef RISCV_TLM_MAP_H
 #define RISCV_TLM_MAP_H
 
+#include <systemc>
+
+#include <tlm_utils/simple_initiator_socket.h>
+#include <tlm_utils/simple_target_socket.h>
+
 
 #include <functional>
 #include <map>
 #include <string.h>
 #include <assert.h>
-#include <systemc>
 
 /*
  * Optional modelling layer to simplify TLM register and memory access.
@@ -173,7 +177,6 @@ struct RegisterMapping : public AbstractMapping {
 		auto it = addr_to_reg.find(addr - addr % 4);  // clamp to nearest register
 		if (it == addr_to_reg.end())
 			return false;
-
 		assert(len + (addr % 4) <= 4);  // do not allow access beyond the register
 		assert(cmd == tlm::TLM_READ_COMMAND || cmd == tlm::TLM_WRITE_COMMAND);
 

@@ -69,6 +69,7 @@ void functional_test_basic(PLIC<1, numberInterrupts, maxPriority>& dut)
 {
 	Simple_interrupt_target &sit = *reinterpret_cast<Simple_interrupt_target*>(dut.target_harts[0]);
 	uint32_t i = klee_int("interrupt number");
+//	uint32_t i = 51;
 
     dut.gateway_trigger_interrupt(i);
 
@@ -167,7 +168,6 @@ void functional_test_consider_threshold(PLIC<1, numberInterrupts, maxPriority>& 
 	klee_assume(hart_consider_thr < numberInterrupts);
 
 
-
 	//Direct write into member, skipping transport
 	dut.interrupt_priorities[a] = a_prio;
 	dut.hart_priority_threshold[0] = hart_consider_thr;
@@ -246,27 +246,56 @@ void interface_test_read(PLIC<1, numberInterrupts, maxPriority>& dut)
 {
 	dut.gateway_trigger_interrupt(1);
 
-	unsigned constexpr max_data_length = 1000;
+	uint32_t address = klee_int("address");
+	unsigned constexpr max_data_length = 100;
 	unsigned data_length = klee_int("data_length");
 	klee_assume(data_length <= max_data_length);
 	uint8_t data[max_data_length];
 	sc_core::sc_time delay;
 	tlm::tlm_generic_payload pl;
 	pl.set_read();
-	pl.set_address(klee_int("address"));
+	pl.set_address(address);
 	pl.set_data_length(data_length);
 	pl.set_data_ptr(data);
 
 	dut.transport(pl, delay);
 
+	uint32_t adrc = address - (address%4);
+
+	for(auto i : dut.interrupt_priorities)
+		assert(i==1);
+
+	for(auto i : dut.hart_enabled_interrupts) {
+		for(auto j : i) {
+			assert(j==0xffffffff);
+		}
+	}
+	assert(dut.hart_priority_threshold[0]==0);
+	if(adrc == 0x200004)
+		assert(dut.hart_claim_response[0]==1);
+	else
+		assert(dut.hart_claim_response[0]==0);
+
+	for(unsigned i=0;i<dut.pending_interrupts.size();++i) {
+		if(adrc == 0x200004) // claim AND only one hart in our tests...
+			assert(dut.pending_interrupts[i]==0);
+		else {
+			if (i == 0)
+				assert(dut.pending_interrupts[i] == 0b10); // triggered interrupt 1 @ start
+			else
+				assert(dut.pending_interrupts[i] == 0);
+		}
+	}
+
 	minikernel_step();
-	minikernel_step();
+//	minikernel_step();
 }
 
 void interface_test_write(PLIC<1, numberInterrupts, maxPriority>& dut)
 {
 	dut.gateway_trigger_interrupt(1);
 
+	uint32_t address = klee_int("address");
 	unsigned constexpr max_data_length = 100;
 	unsigned data_length = klee_int("data_length");
 	INFO(data_length = 0);
@@ -277,15 +306,82 @@ void interface_test_write(PLIC<1, numberInterrupts, maxPriority>& dut)
 	sc_core::sc_time delay;
 	tlm::tlm_generic_payload pl;
 	pl.set_write();
-	pl.set_address(klee_int("address"));
+	pl.set_address(address);
 	INFO(pl.set_address(0x00200004));
 	pl.set_data_length(data_length);
 	pl.set_data_ptr(data);
 
 	dut.transport(pl, delay);
 
+	// pending read-only!!
+	for(unsigned i=0;i<dut.pending_interrupts.size();++i) {
+		if(i==0)
+			assert(dut.pending_interrupts[i]==0b10); // triggered interrupt 1 @ start
+		else
+			assert(dut.pending_interrupts[i]==0);
+	}
+
+	uint8_t adrm = address % 4;
+	if(data_length+adrm<=4) {
+		uint32_t adrc = address - adrm;
+		if(adrc >= 0x0 && adrc <= (0x0 + (dut.interrupt_priorities.size()-1)*4)) {
+			for(unsigned i=0;i<dut.interrupt_priorities.size();++i) {
+				if(0x0+i*4!=adrc) {
+					assert(dut.interrupt_priorities[i]==1);
+					continue;
+				}
+				uint32_t prio_val = 0;
+				memcpy(&prio_val,&data, data_length);
+
+				// check for val>maxPrio
+				if((adrm > 0 && prio_val > 0) || (adrm==0 && prio_val > 32))
+					assert(dut.interrupt_priorities[i]==maxPriority);
+				else
+					assert(memcmp(((unsigned char*)&dut.interrupt_priorities[i])+adrm, data, data_length)==0);
+
+			}
+		} else {
+			for(auto i : dut.interrupt_priorities)
+				assert(i==1);
+		}
+		if(adrc >= 0x2000 && adrc <= 0x2000 + (dut.hart_enabled_interrupts[0].size()-1)*4) {
+			for(unsigned i=0;i<dut.hart_enabled_interrupts[0].size();++i) {
+				if(0x2000+i*4==adrc)
+					assert(memcmp(((unsigned char*)&dut.hart_enabled_interrupts[0][i])+adrm, data, data_length)==0);
+				else
+					assert(dut.hart_enabled_interrupts[0][i]==0xffffffff);
+			}
+		} else {
+			for(auto i : dut.hart_enabled_interrupts) {
+				for(auto j : i) {
+					assert(j==0xffffffff);
+				}
+			}
+		}
+		if(adrc == 0x200000) { // threshold
+			assert(memcmp(((unsigned char*)&dut.hart_priority_threshold[0])+adrm, data, data_length)==0);
+		} else {
+			assert(dut.hart_priority_threshold[0]==0);
+		}
+		if(adrc == 0x200004) { // claim
+			assert(memcmp(((unsigned char*)&dut.hart_claim_response[0])+adrm, data, data_length)==0);
+		} else {
+			assert(dut.hart_claim_response[0]==0);
+		}
+	} else {
+		for(auto i : dut.interrupt_priorities)
+			assert(i==1);
+		for(auto i : dut.hart_enabled_interrupts) {
+			for(auto j : i) {
+				assert(j==0xffffffff);
+			}
+		}
+		assert(dut.hart_priority_threshold[0]==0);
+		assert(dut.hart_claim_response[0]==0);
+	}
+
 	minikernel_step();
-	minikernel_step();
+//	minikernel_step();
 }
 
 
@@ -295,6 +391,8 @@ int main(int argc, char* argv[])
 	Simple_interrupt_target sit(dut);
 	//interrupt line plic -> sit
 	dut.target_harts[0] = &sit;
+
+	Simcontext::get().initialize();
 	minikernel_step();	//0ms
 
 	if(argc == 2)

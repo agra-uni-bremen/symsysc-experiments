@@ -1,0 +1,96 @@
+#pragma once
+
+// #include "peripherals/periph.c"
+#include "util/tlm_map.h"
+#include <iostream>
+#include <systemc.h>
+
+int32_t task_hash_f(int32_t a, int32_t b)
+{
+	int32_t a2 = a;
+	int32_t b2 = b;
+	int32_t x;
+	int32_t y;
+	int32_t hash = 17;
+	for (int i = 0; i < 8; ++i)
+	{
+		x = a2;
+		y = b2;
+		hash = hash * 23 + (x ^ ((y << 13) | (y >> 19)));
+		a2 = hash;
+		hash = hash * 23 + (y ^ ((x << 7) | (x >> 25)));
+		b2 = hash;
+	}
+	return hash;
+}
+
+struct hash_tlm : public sc_module {
+	tlm_utils::simple_target_socket<hash_tlm> tsock;
+
+	vp::map::LocalRouter router;
+
+	uint32_t a;
+	uint32_t b;
+	uint32_t hash;
+	uint32_t ready;
+	uint32_t valid;
+
+	sc_event run_event;
+
+	SC_HAS_PROCESS(hash_tlm);
+	hash_tlm(sc_core::sc_module_name) {
+		tsock.register_b_transport(this, &hash_tlm::transport);
+
+		auto &regs = router
+				.add_register_bank({})
+				.register_handler(this, &hash_tlm::register_access_callback);
+		regs.add_register({0x00, &a});
+		regs.add_register({0x04, &b});
+		regs.add_register({0x08, &hash, vp::map::read_only});
+		regs.add_register({0x0c, &ready, vp::map::read_only});
+		regs.add_register({0x10, &valid});
+		SC_THREAD(run);
+	}
+
+	void transport(tlm::tlm_generic_payload &trans, sc_core::sc_time &delay) {
+		router.transport(trans, delay);
+	}
+
+	void register_access_callback(const vp::map::register_access_t &r) {
+		// No checks before execution?
+		r.fn();
+
+		if (r.write && (r.vptr == &valid)) { // if valid is set, run_event needs to be triggered
+			if(valid==1) {
+				run_event.notify(sc_core::sc_time(0, SC_NS));
+			}
+		} else if(r.read && (r.addr == 0x08)) { // if res is read, ready needs to be set to 0
+			ready = 0;
+		}
+	}
+
+	void run() {
+		enum class Label {
+			init,
+			execute
+		};
+
+		static Label position = Label::init;
+		switch(position) {
+			case Label::execute:
+				goto EXECUTE;
+			default:
+				break;
+		}
+		while(true) {
+			sc_core::wait(run_event);
+			position = Label::execute;
+			return;
+			EXECUTE:
+			hash = task_hash_f(a, b);
+			ready = 1;
+		}
+	}
+};
+
+

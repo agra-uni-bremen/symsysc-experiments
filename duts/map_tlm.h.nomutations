@@ -1,0 +1,96 @@
+#pragma once
+
+// #include "peripherals/periph.c"
+#include "util/tlm_map.h"
+#include <iostream>
+#include <systemc.h>
+
+// vSize hab ich in dem peripheral auf 8 gesetzt
+void task_map_f(uint8_t vSize, int32_t *buf, uint32_t mappingVal)
+{
+	for (unsigned i = 0; i < vSize; ++i)
+	{
+		buf[i] = (buf[i] & mappingVal) + 19;
+	}
+}
+
+struct map_tlm : public sc_module {
+	tlm_utils::simple_target_socket<map_tlm> tsock;
+
+	vp::map::LocalRouter router;
+
+	uint32_t mAddr = 0;
+	uint32_t mWdat = 0;
+	uint32_t mRdat = 0;
+	uint32_t mWREn = 0;
+	uint32_t mapV = 0;
+	uint32_t valid = 0;
+	uint32_t ready = 0;
+
+	int32_t data[8];
+
+	sc_event run_event;
+
+	SC_HAS_PROCESS(map_tlm);
+	map_tlm(sc_core::sc_module_name) {
+		tsock.register_b_transport(this, &map_tlm::transport);
+
+		auto &regs = router
+				.add_register_bank({})
+				.register_handler(this, &map_tlm::register_access_callback);
+		regs.add_register({0x00, &mAddr});
+		regs.add_register({0x04, &mWdat});
+		regs.add_register({0x08, &mRdat});
+		regs.add_register({0x0c, &mWREn});
+		regs.add_register({0x10, &mapV});
+		regs.add_register({0x14, &valid});
+		regs.add_register({0x18, &ready});
+		SC_THREAD(run);
+	}
+
+	void transport(tlm::tlm_generic_payload &trans, sc_core::sc_time &delay) {
+		router.transport(trans, delay);
+	}
+
+	void register_access_callback(const vp::map::register_access_t &r) {
+		// No checks before execution?
+		r.fn();
+
+		if (r.write && (r.addr == 0x14)) { // if valid is set, run_event needs to be triggered
+			if(valid==1) {
+				run_event.notify(sc_core::sc_time(0, SC_NS));
+			}
+		} else if(r.write && (r.addr == 0x0c)) { // enabled, write value to address in buffer
+			data[mAddr] = mWdat;
+		} else if(r.write && (r.addr == 0x00)) {
+			mRdat = data[mAddr];
+		} else if(r.read && (r.addr == 0x08)) {
+			ready = 0;
+		}
+	}
+
+	void run() {
+		enum class Label {
+			init,
+			execute
+		};
+
+		static Label position = Label::init;
+		switch(position) {
+			case Label::execute:
+				goto EXECUTE;
+			default:
+				break;
+		}
+		while(true) {
+			sc_core::wait(run_event);
+			position = Label::execute;
+			return;
+			EXECUTE:
+			task_map_f(8, data, mapV);
+			ready = 1;
+		}
+	}
+};
+
+
